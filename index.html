@@ -1151,26 +1151,93 @@ function esc(s) {
 // ════════════════════════════════
 buildTraits();
 
-// ── Hardcoded config — auto connect on load ──
-const HARDCODED = {
-  geminiKey:  'AIzaSyBGIScEtX6GH9Vt2ZLEctvgYO_xI8SOVOU',
+// ── Firebase config (non-secret, safe to store) ──
+const FB_CONFIG = {
   fbApiKey:   'AIzaSyDgKCEIvv0Jq_yZBYsmcryc-ypOaWgx0Ic',
   fbProjectId:'ai-character-test',
   fbDbUrl:    'https://ai-character-test-default-rtdb.firebaseio.com',
   fbAppId:    '1:32663790502:web:253e8c29e3908c1df7a567'
 };
 
-geminiKey = HARDCODED.geminiKey;
+// ── Gemini Key — stored in localStorage ──
+function getSavedGeminiKey() {
+  try { return localStorage.getItem('ie_gemini_key') || ''; } catch(e) { return ''; }
+}
+function saveGeminiKey(key) {
+  try { localStorage.setItem('ie_gemini_key', key); } catch(e) {}
+}
 
-// Wait for Firebase SDK to fully load before connecting
 function waitForFirebase() {
   if (typeof firebase !== 'undefined') {
-    initFb(HARDCODED.fbApiKey, HARDCODED.fbProjectId, HARDCODED.fbDbUrl, HARDCODED.fbAppId);
+    initFb(FB_CONFIG.fbApiKey, FB_CONFIG.fbProjectId, FB_CONFIG.fbDbUrl, FB_CONFIG.fbAppId);
   } else {
     setTimeout(waitForFirebase, 100);
   }
 }
-window.addEventListener('load', waitForFirebase);
+
+window.addEventListener('load', () => {
+  const saved = getSavedGeminiKey();
+  if (saved) {
+    geminiKey = saved;
+    waitForFirebase();
+  } else {
+    showKeyPrompt();
+  }
+});
+
+function showKeyPrompt() {
+  const overlay = document.createElement('div');
+  overlay.id = 'key-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    background:rgba(5,5,8,0.97);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    font-family:'Share Tech Mono',monospace;
+    padding:24px;
+  `;
+  overlay.innerHTML = \`
+    <div style="max-width:420px;width:100%;text-align:center;">
+      <div style="font-family:'Noto Serif TC',serif;font-size:28px;color:#e0d8ff;margin-bottom:8px;">感染回聲</div>
+      <div style="font-size:10px;color:#333355;letter-spacing:0.3em;margin-bottom:40px;">INFECTION ECHO</div>
+      <div style="font-size:11px;color:#555580;letter-spacing:0.15em;margin-bottom:12px;">輸入 GEMINI API KEY 以啟動系統</div>
+      <input id="key-input" type="password"
+        placeholder="AIza..."
+        style="width:100%;background:rgba(255,255,255,0.04);border:0.5px solid rgba(155,109,255,0.3);
+        border-radius:8px;color:#ddd;font-family:'Share Tech Mono',monospace;font-size:13px;
+        padding:12px 16px;outline:none;margin-bottom:10px;text-align:center;letter-spacing:0.05em;"
+      />
+      <div id="key-err" style="font-size:11px;color:rgba(255,79,109,0.7);min-height:18px;margin-bottom:10px;"></div>
+      <button onclick="submitKey()"
+        style="width:100%;padding:12px;background:rgba(155,109,255,0.18);
+        border:0.5px solid rgba(155,109,255,0.4);border-radius:8px;
+        color:#c4a0f0;cursor:pointer;font-family:'Share Tech Mono',monospace;
+        font-size:12px;letter-spacing:0.1em;">
+        ▶ 啟動
+      </button>
+      <div style="font-size:10px;color:#222240;margin-top:16px;line-height:1.8;">
+        Key 僅儲存於此裝置，不會上傳<br>
+        取得 Key：aistudio.google.com/apikey
+      </div>
+    </div>
+  \`;
+  document.body.appendChild(overlay);
+  document.getElementById('key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitKey();
+  });
+}
+
+function submitKey() {
+  const val = document.getElementById('key-input').value.trim();
+  if (!val.startsWith('AIza')) {
+    document.getElementById('key-err').textContent = '格式不正確，Key 應以 AIza 開頭';
+    return;
+  }
+  geminiKey = val;
+  saveGeminiKey(val);
+  document.getElementById('key-overlay').remove();
+  waitForFirebase();
+}
 
 // Preload voices
 speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();

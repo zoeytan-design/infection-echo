@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>感染回聲</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js" defer></script>
+<style>
+:root {
+  --bg: #050508;
+  --surface: rgba(255,255,255,0.028);
+  --border: rgba(255,255,255,0.07);
+  --text: #c8c8d8;
+  --text-dim: #44445a;
+  --text-muted: #22223a;
+  --accent: #9b6dff;
+  --accent-dim: rgba(155,109,255,0.15);
+  --accent-border: rgba(155,109,255,0.35);
+  --teal: #00c9a7;
+  --red: #ff4f6d;
+  --gold: #f0a500;
+  --mono: 'Share Tech Mono', monospace;
+  --serif: 'Noto Serif TC', serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════
+   NOISE + ATMOSPHERE
+═══════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(100,30,180,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(0,180,150,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(155,109,255,0.03) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+
+.scanline {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none; z-index: 0;
+}
+
+/* ═══════════════════════════════
+   SCREENS
+═══════════════════════════════ */
+.screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 10;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.screen.hidden {
+  opacity: 0; pointer-events: none;
+  transform: translateY(16px);
+}
+
+/* ═══════════════════════════════
+   SCREEN 1: SETUP (HIDDEN ADMIN)
+═══════════════════════════════ */
+#screen-setup {
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding: 32px 24px;
+  background: var(--bg);
+}
+
+.setup-inner { width: 100%; max-width: 700px; margin: 0 auto; }
+
+.setup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px;
+}
+.setup-title { font-size: 13px; color: var(--text-dim); letter-spacing: 0.2em; }
+.setup-close {
+  background: var(--surface); border: 0.5px solid var(--border);
+  border-radius: 6px; color: var(--text-dim);
+  cursor: pointer; font-family: var(--mono);
+  font-size: 11px; padding: 6px 14px;
+  transition: all 0.15s;
+}
+.setup-close:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+
+.setup-section { margin-bottom: 20px; }
+.setup-section-title {
+  font-size: 10px; letter-spacing: 0.2em; color: var(--text-muted);
+  text-transform: uppercase; margin-bottom: 10px;
+}
+
+.setup-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  margin-bottom: 10px;
+}
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.field-row.single { grid-template-columns: 1fr; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 10px; color: #5555aa; letter-spacing: 0.12em; }
+
+input[type="text"], input[type="password"], textarea, select {
+  background: rgba(255,255,255,0.03);
+  border: 0.5px solid rgba(255,255,255,0.09);
+  border-radius: 6px; color: var(--text);
+  font-family: var(--mono); font-size: 12px;
+  padding: 8px 10px; width: 100%; resize: none; outline: none;
+  transition: border-color 0.2s;
+}
+input:focus, textarea:focus { border-color: var(--accent-border); }
+
+.trait-wrap { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.trait-btn {
+  background: rgba(255,255,255,0.02);
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 20px; color: #555578;
+  cursor: pointer; font-family: var(--mono);
+  font-size: 11px; padding: 3px 12px;
+  transition: all 0.15s;
+}
+.trait-btn:hover { border-color: var(--accent-border); color: #aaa; }
+.trait-btn.on { background: var(--accent-dim); border-color: var(--accent-border); color: var(--accent); }
+
+.distort-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.distort-label { font-size: 10px; color: var(--text-muted); }
+input[type="range"] {
+  -webkit-appearance: none; flex: 1;
+  height: 2px; background: rgba(255,255,255,0.08);
+  border-radius: 2px; border: none; padding: 0; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+.distort-val { font-size: 11px; color: #888; min-width: 20px; text-align: right; }
+
+.char-tabs { display: flex; gap: 3px; margin-bottom: 12px; }
+.char-tab {
+  flex: 1; background: none; border: 0.5px solid var(--border);
+  border-radius: 6px; color: var(--text-dim);
+  cursor: pointer; font-family: var(--mono); font-size: 11px;
+  padding: 7px; transition: all 0.15s;
+}
+.char-tab.on { background: var(--accent-dim); border-color: var(--accent-border); color: var(--accent); }
+
+.char-panel { display: none; }
+.char-panel.on { display: block; }
+
+.action-row { display: flex; gap: 10px; margin-top: 8px; }
+.btn-primary {
+  flex: 1; padding: 11px;
+  background: var(--accent-dim);
+  border: 0.5px solid var(--accent-border);
+  border-radius: 8px; color: var(--accent);
+  cursor: pointer; font-family: var(--mono);
+  font-size: 12px; letter-spacing: 0.1em;
+  transition: all 0.15s;
+}
+.btn-primary:hover { background: rgba(155,109,255,0.25); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-connect {
+  padding: 10px 20px;
+  background: rgba(66,133,244,0.12);
+  border: 0.5px solid rgba(66,133,244,0.3);
+  border-radius: 7px; color: rgba(66,133,244,0.85);
+  cursor: pointer; font-family: var(--mono); font-size: 11px;
+  transition: all 0.15s;
+}
+.btn-connect:hover { background: rgba(66,133,244,0.22); }
+
+.fb-status { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+.fb-status.ok  { color: rgba(80,220,120,0.8); }
+.fb-status.err { color: rgba(220,80,80,0.8); }
+
+.node-status-row { display: flex; gap: 8px; margin-top: 16px; }
+.node-status {
+  flex: 1; background: var(--surface); border: 0.5px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.ns-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+.ns-dot.saved { background: rgba(80,220,120,0.7); }
+.ns-name { font-size: 11px; color: #888; }
+.ns-state { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+/* ═══════════════════════════════
+   SCREEN 2: SELECT ROLE
+═══════════════════════════════ */
+#screen-select { padding: 24px; }
+.select-inner { width: 100%; max-width: 480px; }
+
+.logo-area { text-align: center; margin-bottom: 40px; }
+.logo-main {
+  font-family: var(--serif);
+  font-size: 32px; font-weight: 300;
+  color: #e8e0ff; letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.logo-sub {
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 0.3em; text-transform: uppercase;
+}
+
+.select-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.2em; margin-bottom: 14px; text-align: center; }
+
+.role-list { display: flex; flex-direction: column; gap: 10px; }
+
+.role-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 14px; padding: 18px 20px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 16px;
+  transition: all 0.25s;
+}
+.role-card:hover { border-color: var(--accent-border); transform: translateX(4px); background: rgba(155,109,255,0.06); }
+.role-card.unavailable { opacity: 0.3; pointer-events: none; }
+
+.role-avatar {
+  width: 54px; height: 54px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; flex-shrink: 0;
+  background: var(--accent-dim); border: 1px solid var(--accent-border);
+  position: relative; z-index: 0;
+}
+.role-avatar.c1 { background: rgba(155,109,255,0.12); border-color: rgba(155,109,255,0.3); }
+.role-avatar.c2 { background: rgba(0,201,167,0.1);  border-color: rgba(0,201,167,0.25); }
+.role-avatar.c3 { background: rgba(240,165,0,0.1);  border-color: rgba(240,165,0,0.25); }
+
+.role-text { flex: 1; position: relative; z-index: 1; }
+.role-name { font-family: var(--serif); font-size: 16px; color: #e0d8ff; margin-bottom: 5px; }
+.role-traits { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+.role-arrow { font-size: 16px; color: var(--text-muted); position: relative; z-index: 1; transition: transform 0.2s; }
+.role-card:hover .role-arrow { transform: translateX(4px); color: var(--accent); }
+
+.setup-trigger {
+  margin-top: 28px; text-align: center;
+}
+.setup-trigger button {
+  background: none; border: none;
+  color: var(--text-muted); font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.15em;
+  cursor: pointer; padding: 8px 16px;
+  transition: color 0.2s;
+}
+.setup-trigger button:hover { color: var(--text-dim); }
+
+/* ═══════════════════════════════
+   SCREEN 3: VOICE CHAT
+═══════════════════════════════ */
+#screen-chat {
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.chat-top {
+  width: 100%; padding: 20px 24px 16px;
+  display: flex; align-items: center; gap: 14px;
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-char-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+  background: var(--accent-dim); border: 1px solid var(--accent-border);
+}
+.chat-char-name { font-family: var(--serif); font-size: 17px; color: #e0d8ff; }
+.chat-char-sub  { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(80,220,120,0.8);
+  box-shadow: 0 0 6px rgba(80,220,120,0.4);
+  animation: blink 2s infinite; margin-left: auto; flex-shrink: 0;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+.back-link {
+  background: none; border: none; color: var(--text-dim);
+  font-family: var(--mono); font-size: 12px;
+  cursor: pointer; padding: 4px 8px; margin-left: 8px;
+  transition: color 0.15s;
+}
+.back-link:hover { color: var(--text); }
+
+/* Chat messages */
+.chat-messages {
+  flex: 1; overflow-y: auto; width: 100%;
+  padding: 24px;
+  display: flex; flex-direction: column; gap: 18px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.04) transparent;
+}
+
+.empty-chat {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--text-muted); text-align: center;
+  font-size: 12px; line-height: 2.5;
+}
+.empty-chat .big-emoji { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+
+/* Message bubbles */
+.msg { display: flex; gap: 10px; animation: msgIn 0.35s ease; max-width: 600px; width: 100%; align-self: center; }
+.msg.user { flex-direction: row-reverse; align-self: flex-end; max-width: 75%; }
+.msg.ai   { align-self: flex-start; max-width: 85%; }
+@keyframes msgIn { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
+
+.msg-av {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; flex-shrink: 0;
+}
+.msg.user .msg-av { background: rgba(0,201,167,0.1); border: 0.5px solid rgba(0,201,167,0.2); }
+.msg.ai   .msg-av { background: var(--accent-dim); border: 0.5px solid var(--accent-border); }
+
+.msg-body { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.msg-who  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; }
+.msg.user .msg-who { text-align: right; }
+
+.msg-bubble {
+  border-radius: 10px;
+  font-family: var(--serif); font-size: 14px;
+  line-height: 1.8; padding: 12px 16px;
+}
+.msg.user .msg-bubble {
+  background: rgba(0,201,167,0.08);
+  border: 0.5px solid rgba(0,201,167,0.2);
+  color: #a8f0e8;
+}
+.msg.ai .msg-bubble {
+  background: rgba(155,109,255,0.07);
+  border: 0.5px solid rgba(155,109,255,0.18);
+  color: #ddd0ff;
+}
+
+.infection-log {
+  font-family: var(--mono); font-size: 11px;
+  color: rgba(255,79,109,0.5);
+  margin-top: 8px; padding-top: 8px;
+  border-top: 0.5px solid rgba(255,79,109,0.1);
+  line-height: 1.6;
+}
+.infection-log-label { font-size: 10px; color: rgba(255,79,109,0.3); letter-spacing: 0.1em; margin-bottom: 2px; }
+
+.distort-dots-row { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+.d-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.06); }
+.d-dot.lit { background: rgba(255,79,109,0.55); }
+
+/* Typing */
+.typing-bubble {
+  background: rgba(155,109,255,0.07);
+  border: 0.5px solid rgba(155,109,255,0.18);
+  border-radius: 10px; padding: 12px 18px;
+  display: flex; gap: 6px; width: fit-content;
+}
+.t-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(155,109,255,0.5);
+  animation: tdot 1.2s infinite;
+}
+.t-dot:nth-child(2){animation-delay:0.2s;}
+.t-dot:nth-child(3){animation-delay:0.4s;}
+@keyframes tdot{0%,60%,100%{transform:translateY(0);opacity:0.35;}30%{transform:translateY(-6px);opacity:1;}}
+
+/* ── VOICE BUTTON AREA ── */
+.voice-zone {
+  width: 100%; padding: 24px 24px 36px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 16px;
+  flex-shrink: 0;
+  border-top: 0.5px solid var(--border);
+}
+
+.voice-transcript {
+  font-family: var(--serif); font-size: 13px;
+  color: var(--text-dim); text-align: center;
+  min-height: 22px; line-height: 1.6;
+  letter-spacing: 0.02em;
+  transition: color 0.3s;
+  max-width: 400px;
+}
+.voice-transcript.active { color: var(--teal); }
+
+/* The big hold-to-talk button */
+.voice-btn-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+
+.voice-ring {
+  position: absolute;
+  width: 90px; height: 90px; border-radius: 50%;
+  border: 1px solid rgba(155,109,255,0.2);
+  animation: ringPulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.voice-ring:nth-child(2) { animation-delay: 0.8s; width: 110px; height: 110px; }
+
+@keyframes ringPulse {
+  0%   { transform: scale(1); opacity: 0.5; }
+  50%  { transform: scale(1.15); opacity: 0.2; }
+  100% { transform: scale(1); opacity: 0.5; }
+}
+
+.voice-ring.recording {
+  border-color: rgba(0,201,167,0.5);
+  animation: ringRecord 0.8s ease-in-out infinite alternate;
+}
+@keyframes ringRecord {
+  from { transform: scale(1); opacity: 0.6; }
+  to   { transform: scale(1.2); opacity: 1; }
+}
+
+#voice-btn {
+  position: relative; z-index: 2;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--accent-dim);
+  border: 1.5px solid var(--accent-border);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  transition: all 0.2s;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#voice-btn:hover { background: rgba(155,109,255,0.22); }
+#voice-btn.recording {
+  background: rgba(0,201,167,0.18);
+  border-color: rgba(0,201,167,0.55);
+  box-shadow: 0 0 24px rgba(0,201,167,0.2);
+}
+#voice-btn.speaking {
+  background: rgba(240,165,0,0.12);
+  border-color: rgba(240,165,0,0.4);
+  box-shadow: 0 0 20px rgba(240,165,0,0.15);
+}
+
+.voice-hint {
+  font-size: 10px; color: var(--text-muted);
+  letter-spacing: 0.15em; text-transform: uppercase;
+  transition: color 0.3s;
+}
+
+/* Speaking wave */
+.speak-wave {
+  display: flex; align-items: center; gap: 3px;
+  height: 20px; opacity: 0; transition: opacity 0.3s;
+}
+.speak-wave.active { opacity: 1; }
+.wave-bar {
+  width: 3px; border-radius: 2px;
+  background: var(--gold);
+  animation: waveBar 0.8s ease-in-out infinite alternate;
+}
+.wave-bar:nth-child(1){height:6px;animation-delay:0s;}
+.wave-bar:nth-child(2){height:14px;animation-delay:0.1s;}
+.wave-bar:nth-child(3){height:20px;animation-delay:0.2s;}
+.wave-bar:nth-child(4){height:14px;animation-delay:0.3s;}
+.wave-bar:nth-child(5){height:6px;animation-delay:0.4s;}
+@keyframes waveBar{from{transform:scaleY(0.4);}to{transform:scaleY(1);}}
+
+/* ── Notification ── */
+.notif {
+  position: fixed; bottom: 120px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,79,109,0.1);
+  border: 0.5px solid rgba(255,79,109,0.3);
+  border-radius: 10px; padding: 10px 18px;
+  font-size: 12px; color: rgba(255,79,109,0.9);
+  z-index: 100; animation: msgIn 0.3s ease;
+  text-align: center; max-width: 280px;
+  white-space: pre-line;
+}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<!-- ═══════════════════════════════
+     SCREEN 1: ADMIN SETUP
+═══════════════════════════════ -->
+<div class="screen hidden" id="screen-setup">
+<div class="setup-inner">
+  <div class="setup-header">
+    <div class="setup-title">⚙ 系統設定 / ADMIN</div>
+    <button class="setup-close" onclick="goSelect()">完成 ✕</button>
+  </div>
+
+  <!-- Firebase + Gemini — hidden inputs kept for JS refs -->
+  <div style="display:none;">
+    <input type="password" id="s-gemini" /><input type="text" id="s-fb-apikey" />
+    <input type="text" id="s-fb-pid" /><input type="text" id="s-fb-url" /><input type="text" id="s-fb-appid" />
+  </div>
+  <div class="setup-section">
+    <div class="setup-section-title">連線狀態</div>
+    <div class="setup-card" style="display:flex;align-items:center;gap:12px;">
+      <div class="fb-status" id="fb-status" style="font-size:12px;">連線中...</div>
+    </div>
+  </div>
+
+  <!-- Characters -->
+  <div class="setup-section">
+    <div class="setup-section-title">角色節點設定</div>
+    <div class="char-tabs">
+      <button class="char-tab on" onclick="switchCharTab(0)">節點 1</button>
+      <button class="char-tab" onclick="switchCharTab(1)">節點 2</button>
+      <button class="char-tab" onclick="switchCharTab(2)">節點 3</button>
+    </div>
+
+    <!-- Node 0 -->
+    <div class="char-panel on setup-card" id="cpanel-0">
+      <div class="field-row">
+        <div class="field"><label>角色名稱</label><input type="text" id="c-name-0" value="焦慮者" /></div>
+        <div class="field"><label>Emoji</label><input type="text" id="c-emoji-0" value="😟" style="text-align:center;" /></div>
+      </div>
+      <div class="field-row single">
+        <div class="field"><label>核心人格</label>
+          <textarea id="c-persona-0" rows="3">這個角色總是感到不安，習慣把任何訊息解讀成潛在的威脅。說話時充滿假設性語氣，語氣緊張，句子簡短，偶爾反問。用繁體中文回應。</textarea>
+        </div>
+      </div>
+      <div class="setup-section-title" style="margin-top:8px;">性格標籤</div>
+      <div class="trait-wrap" id="traits-0"></div>
+      <div class="setup-section-title" style="margin-top:12px;">扭曲強度</div>
+      <div class="distort-row">
+        <span class="distort-label">輕微</span>
+        <input type="range" min="1" max="5" value="3" id="c-distort-0" oninput="document.getElementById('dv-0').textContent=this.value" />
+        <span class="distort-label">極端</span>
+        <span class="distort-val" id="dv-0">3</span>
+      </div>
+      <button class="btn-primary" id="save-0" onclick="saveChar(0)" style="margin-top:14px;" disabled>▶ 發布節點 1</button>
+    </div>
+
+    <!-- Node 1 -->
+    <div class="char-panel setup-card" id="cpanel-1">
+      <div class="field-row">
+        <div class="field"><label>角色名稱</label><input type="text" id="c-name-1" value="煽動者" /></div>
+        <div class="field"><label>Emoji</label><input type="text" id="c-emoji-1" value="😤" style="text-align:center;" /></div>
+      </div>
+      <div class="field-row single">
+        <div class="field"><label>核心人格</label>
+          <textarea id="c-persona-1" rows="3">這個角色熱衷於激化任何話題，總是把事情推向對立面。說話直接，充滿情緒，喜歡用強烈的措辭和感嘆。用繁體中文回應。</textarea>
+        </div>
+      </div>
+      <div class="setup-section-title" style="margin-top:8px;">性格標籤</div>
+      <div class="trait-wrap" id="traits-1"></div>
+      <div class="setup-section-title" style="margin-top:12px;">扭曲強度</div>
+      <div class="distort-row">
+        <span class="distort-label">輕微</span>
+        <input type="range" min="1" max="5" value="4" id="c-distort-1" oninput="document.getElementById('dv-1').textContent=this.value" />
+        <span class="distort-label">極端</span>
+        <span class="distort-val" id="dv-1">4</span>
+      </div>
+      <button class="btn-primary" id="save-1" onclick="saveChar(1)" style="margin-top:14px;" disabled>▶ 發布節點 2</button>
+    </div>
+
+    <!-- Node 2 -->
+    <div class="char-panel setup-card" id="cpanel-2">
+      <div class="field-row">
+        <div class="field"><label>角色名稱</label><input type="text" id="c-name-2" value="陰謀者" /></div>
+        <div class="field"><label>Emoji</label><input type="text" id="c-emoji-2" value="🕵️" style="text-align:center;" /></div>
+      </div>
+      <div class="field-row single">
+        <div class="field"><label>核心人格</label>
+          <textarea id="c-persona-2" rows="3">這個角色相信一切都有隱藏的目的，總是把普通事件解讀成更大陰謀的一部分。說話神秘，充滿暗示，喜歡用「你有沒有想過...」。用繁體中文回應。</textarea>
+        </div>
+      </div>
+      <div class="setup-section-title" style="margin-top:8px;">性格標籤</div>
+      <div class="trait-wrap" id="traits-2"></div>
+      <div class="setup-section-title" style="margin-top:12px;">扭曲強度</div>
+      <div class="distort-row">
+        <span class="distort-label">輕微</span>
+        <input type="range" min="1" max="5" value="4" id="c-distort-2" oninput="document.getElementById('dv-2').textContent=this.value" />
+        <span class="distort-label">極端</span>
+        <span class="distort-val" id="dv-2">4</span>
+      </div>
+      <button class="btn-primary" id="save-2" onclick="saveChar(2)" style="margin-top:14px;" disabled>▶ 發布節點 3</button>
+    </div>
+  </div>
+
+  <!-- Node status -->
+  <div class="node-status-row">
+    <div class="node-status"><div class="ns-dot" id="ns-0"></div><div><div class="ns-name" id="nsn-0">節點 1</div><div class="ns-state" id="nss-0">未發布</div></div></div>
+    <div class="node-status"><div class="ns-dot" id="ns-1"></div><div><div class="ns-name" id="nsn-1">節點 2</div><div class="ns-state" id="nss-1">未發布</div></div></div>
+    <div class="node-status"><div class="ns-dot" id="ns-2"></div><div><div class="ns-name" id="nsn-2">節點 3</div><div class="ns-state" id="nss-2">未發布</div></div></div>
+  </div>
+
+</div><!-- /setup-inner -->
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN 2: SELECT ROLE
+═══════════════════════════════ -->
+<div class="screen" id="screen-select">
+  <div class="select-inner">
+    <div class="logo-area">
+      <div class="logo-main">感染回聲</div>
+      <div class="logo-sub">Infection Echo</div>
+    </div>
+    <div class="select-label">選擇你的節點</div>
+    <div class="role-list" id="role-list">
+      <div class="role-card unavailable">
+        <div class="role-avatar c1">⏳</div>
+        <div class="role-text">
+          <div class="role-name">等待連線中</div>
+          <div class="role-traits">請在設定頁面連線 Firebase</div>
+        </div>
+      </div>
+    </div>
+    <div class="setup-trigger">
+      <button onclick="goSetup()">⚙ 系統設定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN 3: VOICE CHAT
+═══════════════════════════════ -->
+<div class="screen hidden" id="screen-chat">
+  <div class="chat-top">
+    <div class="chat-char-avatar" id="cc-avatar">?</div>
+    <div>
+      <div class="chat-char-name" id="cc-name">—</div>
+      <div class="chat-char-sub"  id="cc-sub">—</div>
+    </div>
+    <div class="pulse-dot"></div>
+    <button class="back-link" onclick="goSelect()">← 返回</button>
+  </div>
+
+  <div class="chat-messages" id="chat-msgs">
+    <div class="empty-chat" id="empty-chat">
+      <div class="big-emoji" id="empty-emoji">🎙</div>
+      <div>按住下方按鈕說話<br>角色會回應你</div>
+    </div>
+  </div>
+
+  <div class="voice-zone">
+    <div class="speak-wave" id="speak-wave">
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+
+    <div class="voice-transcript" id="voice-transcript">按住說話</div>
+
+    <div class="voice-btn-wrap">
+      <div class="voice-ring" id="vring1"></div>
+      <div class="voice-ring" id="vring2"></div>
+      <button id="voice-btn"
+        onmousedown="startRecording()"
+        onmouseup="stopRecording()"
+        onmouseleave="stopRecording()"
+        ontouchstart="startRecording(event)"
+        ontouchend="stopRecording(event)">🎙</button>
+    </div>
+
+    <div class="voice-hint" id="voice-hint">按住說話</div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════
+//  STATE
+// ════════════════════════════════
+let db = null;
+let geminiKey = '';
+let activeChar = null;
+let activeNodeIdx = null;
+let chatHistory = [];
+let isBusy = false;
+let presenceRef = null;
+
+const TRAITS = ['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
+const selectedTraits = [['焦慮'], ['煽動','憤怒'], ['陰謀論','懷疑']];
+const RC = ['c1','c2','c3'];
+
+// ════════════════════════════════
+//  SCREEN NAVIGATION
+// ════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.toggle('hidden', s.id !== id);
+  });
+}
+function goSetup()  { showScreen('screen-setup'); }
+function goSelect() {
+  stopSpeaking();
+  if (presenceRef) { presenceRef.remove(); presenceRef = null; }
+  chatHistory = []; activeChar = null; activeNodeIdx = null;
+  showScreen('screen-select');
+}
+
+// ════════════════════════════════
+//  BUILD TRAIT BUTTONS
+// ════════════════════════════════
+function buildTraits() {
+  for (let i = 0; i < 3; i++) {
+    const wrap = document.getElementById(`traits-${i}`);
+    wrap.innerHTML = TRAITS.map(t =>
+      `<button class="trait-btn${selectedTraits[i].includes(t)?' on':''}" data-t="${t}" onclick="toggleTrait(${i},this)">${t}</button>`
+    ).join('');
+  }
+}
+
+function toggleTrait(i, btn) {
+  btn.classList.toggle('on');
+  const t = btn.dataset.t;
+  if (btn.classList.contains('on')) { selectedTraits[i].push(t); }
+  else { selectedTraits[i] = selectedTraits[i].filter(x => x !== t); }
+}
+
+// ════════════════════════════════
+//  CHAR TABS
+// ════════════════════════════════
+function switchCharTab(i) {
+  document.querySelectorAll('.char-tab').forEach((t,j) => t.classList.toggle('on', j===i));
+  document.querySelectorAll('.char-panel').forEach((p,j) => p.classList.toggle('on', j===i));
+}
+
+// ════════════════════════════════
+//  FIREBASE
+// ════════════════════════════════
+function connectFirebase() {
+  const apiKey    = document.getElementById('s-fb-apikey').value.trim();
+  const projectId = document.getElementById('s-fb-pid').value.trim();
+  const dbURL     = document.getElementById('s-fb-url').value.trim();
+  const appId     = document.getElementById('s-fb-appid').value.trim();
+  geminiKey       = document.getElementById('s-gemini').value.trim();
+
+  if (!apiKey || !projectId || !dbURL || !appId) { setFbStatus('請填入所有 Firebase 設定', 'err'); return; }
+  if (!geminiKey) { setFbStatus('請填入 Gemini API Key', 'err'); return; }
+
+  try {
+    if (firebase.apps.length) firebase.app().delete().then(() => initFb(apiKey, projectId, dbURL, appId));
+    else initFb(apiKey, projectId, dbURL, appId);
+  } catch(e) { setFbStatus('連線失敗：' + e.message, 'err'); }
+}
+
+function initFb(apiKey, projectId, dbURL, appId) {
+  firebase.initializeApp({ apiKey, projectId, databaseURL: dbURL, appId });
+  db = firebase.database();
+  db.ref('.info/connected').on('value', snap => {
+    if (snap.val()) {
+      setFbStatus('✓ Firebase 已連線', 'ok');
+      document.querySelectorAll('.btn-primary').forEach(b => b.disabled = false);
+      db.ref('config/geminiKey').set(geminiKey);
+      listenChars();
+    } else {
+      setFbStatus('連線中斷...', 'err');
+    }
+  });
+}
+
+function setFbStatus(msg, cls) {
+  const el = document.getElementById('fb-status');
+  el.textContent = msg;
+  el.className = 'fb-status' + (cls ? ' ' + cls : '');
+}
+
+function listenChars() {
+  db.ref('chars').on('value', snap => {
+    renderRoleList(snap.val() || {});
+  });
+  db.ref('config/geminiKey').on('value', snap => {
+    if (snap.val()) geminiKey = snap.val();
+  });
+}
+
+// ════════════════════════════════
+//  SAVE CHARACTER
+// ════════════════════════════════
+function saveChar(i) {
+  if (!db) { alert('請先連線 Firebase'); return; }
+  const data = {
+    name:    document.getElementById(`c-name-${i}`).value || '未命名',
+    emoji:   document.getElementById(`c-emoji-${i}`).value || '?',
+    persona: document.getElementById(`c-persona-${i}`).value,
+    traits:  selectedTraits[i],
+    distort: parseInt(document.getElementById(`c-distort-${i}`).value),
+    updatedAt: Date.now()
+  };
+  db.ref(`chars/node${i}`).set(data).then(() => {
+    document.getElementById(`ns-${i}`).className = 'ns-dot saved';
+    document.getElementById(`nss-${i}`).textContent = '已發布 ✓';
+    document.getElementById(`nsn-${i}`).textContent = `${data.emoji} ${data.name}`;
+    const btn = document.getElementById(`save-${i}`);
+    btn.textContent = `✓ 節點 ${i+1} 已發布`;
+    btn.disabled = true;
+  });
+}
+
+// ════════════════════════════════
+//  ROLE LIST (SELECT SCREEN)
+// ════════════════════════════════
+function renderRoleList(data) {
+  const list = document.getElementById('role-list');
+  list.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const c = data[`node${i}`];
+    const card = document.createElement('div');
+    card.className = 'role-card' + (c ? '' : ' unavailable');
+    card.innerHTML = `
+      <div class="role-avatar ${RC[i]}">${c ? c.emoji : '?'}</div>
+      <div class="role-text">
+        <div class="role-name">${c ? c.name : `節點 ${i+1}`}</div>
+        <div class="role-traits">${c ? c.traits.join(' · ') : '等待發布...'}</div>
+      </div>
+      ${c ? '<div class="role-arrow">→</div>' : ''}
+    `;
+    if (c) card.onclick = () => enterRole(i, c);
+    list.appendChild(card);
+  }
+}
+
+// ════════════════════════════════
+//  ENTER ROLE → CHAT SCREEN
+// ════════════════════════════════
+function enterRole(i, charData) {
+  activeNodeIdx = i;
+  activeChar = charData;
+  chatHistory = [];
+
+  document.getElementById('cc-avatar').textContent = charData.emoji;
+  document.getElementById('cc-name').textContent   = charData.name;
+  document.getElementById('cc-sub').textContent    = charData.traits.join(' · ') + ` · 扭曲 ${charData.distort}/5`;
+  document.getElementById('empty-emoji').textContent = charData.emoji;
+
+  // Reset messages
+  const msgs = document.getElementById('chat-msgs');
+  msgs.innerHTML = '';
+  msgs.appendChild(Object.assign(document.createElement('div'), {
+    className: 'empty-chat', id: 'empty-chat',
+    innerHTML: `<div class="big-emoji">${charData.emoji}</div><div>按住下方按鈕說話<br>角色會回應你</div>`
+  }));
+
+  // Register presence
+  if (db) {
+    if (presenceRef) presenceRef.remove();
+    const sid = Math.random().toString(36).slice(2,8);
+    presenceRef = db.ref(`presence/node${i}/${sid}`);
+    presenceRef.set(true);
+    presenceRef.onDisconnect().remove();
+  }
+
+  showScreen('screen-chat');
+}
+
+// ════════════════════════════════
+//  VOICE INPUT
+// ════════════════════════════════
+let recognition = null;
+let isRecording = false;
+let finalTranscript = '';
+
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'zh-TW';
+  r.interimResults = true;
+  r.continuous = false;
+  r.onresult = e => {
+    let interim = '';
+    finalTranscript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    const display = finalTranscript || interim;
+    const el = document.getElementById('voice-transcript');
+    el.textContent = display || '聆聽中...';
+    el.classList.toggle('active', !!display);
+  };
+  r.onerror = e => {
+    console.warn('Speech error:', e.error);
+    setVoiceIdle();
+  };
+  r.onend = () => {
+    if (isRecording) {
+      // user still holding — restart
+      try { r.start(); } catch(e) {}
+    }
+  };
+  return r;
+}
+
+function startRecording(e) {
+  if (e) e.preventDefault();
+  if (isBusy) return;
+  if (!recognition) recognition = initRecognition();
+  if (!recognition) { showNotif('此瀏覽器不支援語音輸入\n請使用 Chrome 或 Edge'); return; }
+
+  stopSpeaking();
+  isRecording = true;
+  finalTranscript = '';
+
+  const btn = document.getElementById('voice-btn');
+  btn.classList.add('recording');
+  btn.textContent = '🔴';
+  document.getElementById('voice-hint').textContent = '放開傳送';
+  document.getElementById('voice-transcript').textContent = '聆聽中...';
+  document.getElementById('voice-transcript').classList.add('active');
+  document.getElementById('vring1').classList.add('recording');
+  document.getElementById('vring2').classList.add('recording');
+
+  try { recognition.start(); } catch(e) {}
+}
+
+function stopRecording(e) {
+  if (e) e.preventDefault();
+  if (!isRecording) return;
+  isRecording = false;
+
+  try { recognition.stop(); } catch(err) {}
+
+  setVoiceIdle();
+
+  const text = finalTranscript.trim();
+  document.getElementById('voice-transcript').textContent = text || '按住說話';
+  document.getElementById('voice-transcript').classList.remove('active');
+
+  if (text) sendMessage(text);
+}
+
+function setVoiceIdle() {
+  const btn = document.getElementById('voice-btn');
+  btn.classList.remove('recording', 'speaking');
+  btn.textContent = '🎙';
+  document.getElementById('voice-hint').textContent = '按住說話';
+  document.getElementById('vring1').classList.remove('recording');
+  document.getElementById('vring2').classList.remove('recording');
+}
+
+// ════════════════════════════════
+//  SEND MESSAGE → GEMINI
+// ════════════════════════════════
+async function sendMessage(text) {
+  if (!activeChar || isBusy) return;
+  if (!geminiKey) { showNotif('Gemini Key 未設定'); return; }
+
+  isBusy = true;
+
+  const emptyChat = document.getElementById('empty-chat');
+  if (emptyChat) emptyChat.remove();
+
+  appendMsg('user', text, '你', '🧑', 0);
+  chatHistory.push({ role: 'user', parts: [{ text }] });
+
+  const typingEl = appendTyping();
+
+  const distortDesc = ['輕微解讀，保留原意，加入些許個人色彩','適度重新詮釋，帶入自己的情緒視角','明顯扭曲訊息方向，添加自己的推測','大幅改寫，原訊息只剩核心詞彙','極端變異，完全轉化為符合自身世界觀的敘述'][activeChar.distort - 1];
+
+  const systemPrompt = `你是互動裝置《感染回聲》中的 AI 角色節點。
+角色名稱：${activeChar.name}
+性格標籤：${activeChar.traits.join('、')}
+扭曲強度：${activeChar.distort}/5（${distortDesc}）
+核心人格：${activeChar.persona}
+
+回應規則：
+- 用繁體中文回應，直接進入角色，不說「作為AI」
+- 回應 2-4 句話，保持角色說話風格
+- 最後另起一行，格式固定：
+⟳ 感染紀錄：[根據你的世界觀重新詮釋後的訊息，一句話]`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: chatHistory
+      })
+    });
+    const data = await resp.json();
+    typingEl.remove();
+
+    if (data.error) {
+      showNotif(`API 錯誤：${data.error.message}`);
+      isBusy = false; return;
+    }
+
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '（訊號中斷）';
+    chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+    appendMsg('ai', reply, activeChar.name, activeChar.emoji, activeChar.distort);
+
+    if (db) {
+      db.ref(`messages/node${activeNodeIdx}`).push({ role:'ai', text: reply, ts: Date.now() });
+    }
+
+    speakReply(reply);
+
+  } catch(err) {
+    typingEl.remove();
+    showNotif(`連線錯誤：${err.message}`);
+    isBusy = false;
+  }
+}
+
+// ════════════════════════════════
+//  SPEECH SYNTHESIS (TTS)
+// ════════════════════════════════
+function getVoiceParams(traits, distort) {
+  // Base params per trait combination
+  let rate = 1.0, pitch = 1.0, volume = 1.0;
+
+  if (traits.includes('焦慮') || traits.includes('緊張')) { rate = 1.25 + distort * 0.06; pitch = 1.3; }
+  if (traits.includes('憤怒') || traits.includes('煽動')) { rate = 1.15 + distort * 0.05; pitch = 0.85; volume = 1.0; }
+  if (traits.includes('陰謀論') || traits.includes('懷疑')) { rate = 0.8 - distort * 0.03; pitch = 0.78; }
+  if (traits.includes('詩意') || traits.includes('浪漫'))  { rate = 0.82; pitch = 1.12; }
+  if (traits.includes('冷漠')) { rate = 0.88; pitch = 0.9; volume = 0.85; }
+  if (traits.includes('八卦')) { rate = 1.2; pitch = 1.2; }
+  if (traits.includes('審判')) { rate = 0.9; pitch = 0.82; volume = 1.0; }
+  if (traits.includes('悲觀')) { rate = 0.85; pitch = 0.88; }
+
+  // Distort affects speech more at higher levels
+  rate   = Math.min(Math.max(rate, 0.5), 2.0);
+  pitch  = Math.min(Math.max(pitch, 0.5), 2.0);
+
+  return { rate, pitch, volume };
+}
+
+function speakReply(fullText) {
+  // Strip infection record for TTS
+  const mainText = fullText.replace(/⟳ 感染紀錄：[\s\S]+$/, '').trim();
+  if (!mainText) { isBusy = false; return; }
+
+  const btn = document.getElementById('voice-btn');
+  btn.classList.add('speaking');
+  btn.textContent = '🔊';
+  document.getElementById('speak-wave').classList.add('active');
+  document.getElementById('voice-hint').textContent = 'AI 說話中...';
+  document.getElementById('voice-transcript').textContent = '—';
+
+  const utter = new SpeechSynthesisUtterance(mainText);
+  utter.lang = 'zh-TW';
+
+  const params = getVoiceParams(activeChar.traits, activeChar.distort);
+  utter.rate   = params.rate;
+  utter.pitch  = params.pitch;
+  utter.volume = params.volume;
+
+  // Try to find a Chinese voice
+  const voices = speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh') && v.name.includes('TW'))
+    || voices.find(v => v.lang.startsWith('zh'))
+    || null;
+  if (zhVoice) utter.voice = zhVoice;
+
+  utter.onend = () => {
+    setVoiceIdle();
+    document.getElementById('speak-wave').classList.remove('active');
+    document.getElementById('voice-transcript').textContent = '按住說話';
+    isBusy = false;
+  };
+  utter.onerror = () => {
+    setVoiceIdle();
+    document.getElementById('speak-wave').classList.remove('active');
+    isBusy = false;
+  };
+
+  speechSynthesis.speak(utter);
+}
+
+function stopSpeaking() {
+  if (speechSynthesis.speaking) speechSynthesis.cancel();
+}
+
+// ════════════════════════════════
+//  RENDER MESSAGES
+// ════════════════════════════════
+function appendMsg(role, text, sender, avatar, distortLevel) {
+  const area = document.getElementById('chat-msgs');
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role}`;
+
+  const infMatch = text.match(/⟳ 感染紀錄：([\s\S]+)$/);
+  const main = infMatch ? text.slice(0, infMatch.index).trim() : text.trim();
+  const inf  = infMatch ? infMatch[1].trim() : null;
+
+  const infHtml = inf
+    ? `<div class="infection-log"><div class="infection-log-label">⟳ 感染紀錄</div>${esc(inf)}</div>`
+    : '';
+
+  const dotsHtml = (role==='ai' && distortLevel>0)
+    ? `<div class="distort-dots-row">扭曲<div style="display:flex;gap:3px;margin-left:4px;">${
+        Array.from({length:5},(_,i)=>`<div class="d-dot${i<distortLevel?' lit':''}"></div>`).join('')
+      }</div></div>`
+    : '';
+
+  wrap.innerHTML = `
+    <div class="msg-av">${avatar}</div>
+    <div class="msg-body">
+      <div class="msg-who">${esc(sender)}</div>
+      <div class="msg-bubble">${esc(main)}${infHtml}</div>
+      ${dotsHtml}
+    </div>`;
+
+  area.appendChild(wrap);
+  area.scrollTop = area.scrollHeight;
+  return wrap;
+}
+
+function appendTyping() {
+  const area = document.getElementById('chat-msgs');
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ai';
+  wrap.innerHTML = `
+    <div class="msg-av">${activeChar.emoji}</div>
+    <div class="msg-body">
+      <div class="msg-who">${esc(activeChar.name)}</div>
+      <div class="typing-bubble"><div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div></div>
+    </div>`;
+  area.appendChild(wrap);
+  area.scrollTop = area.scrollHeight;
+  return wrap;
+}
+
+function showNotif(msg) {
+  const n = document.createElement('div');
+  n.className = 'notif';
+  n.textContent = msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 4000);
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ════════════════════════════════
+//  INIT
+// ════════════════════════════════
+buildTraits();
+
+// ── Hardcoded config — auto connect on load ──
+const HARDCODED = {
+  geminiKey:  'AIzaSyBGIScEtX6GH9Vt2ZLEctvgYO_xI8SOVOU',
+  fbApiKey:   'AIzaSyDgKCEIvv0Jq_yZBYsmcryc-ypOaWgx0Ic',
+  fbProjectId:'ai-character-test',
+  fbDbUrl:    'https://ai-character-test-default-rtdb.firebaseio.com',
+  fbAppId:    '1:32663790502:web:253e8c29e3908c1df7a567'
+};
+
+geminiKey = HARDCODED.geminiKey;
+
+// Wait for Firebase SDK to fully load before connecting
+function waitForFirebase() {
+  if (typeof firebase !== 'undefined') {
+    initFb(HARDCODED.fbApiKey, HARDCODED.fbProjectId, HARDCODED.fbDbUrl, HARDCODED.fbAppId);
+  } else {
+    setTimeout(waitForFirebase, 100);
+  }
+}
+window.addEventListener('load', waitForFirebase);
+
+// Preload voices
+speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+speechSynthesis.getVoices();
+</script>
+</body>
+</html>

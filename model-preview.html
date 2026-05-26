@@ -64,6 +64,7 @@ button:hover { background: rgba(155,109,255,0.25); }
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MeshoptDecoder } from 'https://unpkg.com/meshoptimizer@0.20.0/meshopt_decoder.module.js';
 
 const canvas = document.getElementById('c');
 const wrap = document.getElementById('canvas-wrap');
@@ -116,6 +117,7 @@ controls.target.set(0, 0.8, 0);
 
 // Loader
 const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
 let currentModel = null;
 let mixer = null;
 let animPlaying = true;

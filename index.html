@@ -160,7 +160,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="setup-title">⚙ 系統設定 / ADMIN</div>
     <button class="setup-close" onclick="showScreen('screen-select')">完成 ✕</button>
   </div>
-  <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card"><div class="fb-status" id="fb-status">連線中...</div></div></div>
+  <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="fb-status" id="fb-status">連線中...</div><button class="prev-btn" onclick="fetchVoiceList()" style="margin-top:0;white-space:nowrap;">🔍 查詢可用聲音</button></div></div>
+  <div id="voice-list-result" style="display:none;margin-bottom:14px;"><div class="sec-title">ElevenLabs 可用聲音</div><div class="card" style="font-size:11px;line-height:2;color:#aaa;" id="voice-list-content"></div></div>
   <div class="sec-title">角色節點設定</div>
   <div class="ctabs">
     <button class="ctab on" onclick="switchTab(0)">節點 1</button>
@@ -668,6 +669,27 @@ function appendTyping(){
 }
 
 // ── INIT ──
+async function fetchVoiceList(){
+  if(!elevenKey){showNotif('請先輸入 ElevenLabs Key');return;}
+  document.getElementById('voice-list-content').textContent='查詢中...';
+  document.getElementById('voice-list-result').style.display='block';
+  try{
+    var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
+    var data=await resp.json();
+    if(data.voices){
+      // Cache all
+      data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
+      var html=data.voices.map(function(v){
+        return '<b style="color:#c4a0f0;">'+v.name+'</b> — '+v.voice_id+(v.labels&&v.labels.language?' ('+v.labels.language+')':'');
+      }).join('<br>');
+      document.getElementById('voice-list-content').innerHTML=html||'沒有找到聲音';
+      showNotif('找到 '+data.voices.length+' 個聲音，請複製名稱填入上方');
+    }else{
+      document.getElementById('voice-list-content').textContent=JSON.stringify(data);
+    }
+  }catch(e){document.getElementById('voice-list-content').textContent='錯誤：'+e.message;}
+}
+
 buildTraits();
 speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};
 speechSynthesis.getVoices();

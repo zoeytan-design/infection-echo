@@ -160,7 +160,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="setup-title">⚙ 系統設定 / ADMIN</div>
     <button class="setup-close" onclick="showScreen('screen-select')">完成 ✕</button>
   </div>
-  <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="fb-status" id="fb-status">連線中...</div><button class="prev-btn" onclick="fetchVoiceList()" style="margin-top:0;white-space:nowrap;">🔍 查詢可用聲音</button></div></div>
+  <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="fb-status" id="fb-status">連線中...</div><button class="prev-btn" onclick="fetchVoiceList()" style="margin-top:0;white-space:nowrap;">🔍 查詢可用聲音</button>
+<button class="prev-btn" onclick="testElevenLabs()" style="margin-top:0;white-space:nowrap;background:rgba(0,201,167,0.1);border-color:rgba(0,201,167,0.3);color:var(--teal);">🔊 測試語音連線</button></div></div>
   <div id="voice-list-result" style="display:none;margin-bottom:14px;"><div class="sec-title">ElevenLabs 可用聲音</div><div class="card" style="font-size:11px;line-height:2;color:#aaa;" id="voice-list-content"></div></div>
   <div class="sec-title">角色節點設定</div>
   <div class="ctabs">
@@ -711,6 +712,37 @@ function appendTyping(){
 }
 
 // ── INIT ──
+async function testElevenLabs(){
+  if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}
+  showNotif('測試中...');
+  try{
+    // First get voices
+    var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
+    var data=await resp.json();
+    if(!data.voices){showNotif('API錯誤：'+JSON.stringify(data));return;}
+    // Cache voices
+    data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
+    // Find first zh voice
+    var zhVoice=data.voices.find(function(v){return v.labels&&v.labels.language==='zh';});
+    var testVoice=zhVoice||data.voices[0];
+    if(!testVoice){showNotif('找不到任何聲音');return;}
+    showNotif('找到聲音：'+testVoice.name+'\n正在生成語音...');
+    // Generate speech
+    var resp2=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+testVoice.voice_id+'/stream',{
+      method:'POST',
+      headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},
+      body:JSON.stringify({text:'測試語音連線成功',model_id:'eleven_multilingual_v2',voice_settings:{stability:0.5,similarity_boost:0.75}})
+    });
+    if(!resp2.ok){var e=await resp2.json();showNotif('TTS錯誤：'+JSON.stringify(e.detail||e));return;}
+    var blob=await resp2.blob();
+    var url=URL.createObjectURL(blob);
+    var audio=new Audio(url);
+    audio.onended=function(){URL.revokeObjectURL(url);showNotif('✓ ElevenLabs 連線正常！\n聲音：'+testVoice.name);};
+    audio.onerror=function(){showNotif('音頻播放失敗');};
+    audio.play();
+  }catch(e){showNotif('連線失敗：'+e.message);}
+}
+
 async function fetchVoiceList(){
   if(!elevenKey){showNotif('請先輸入 ElevenLabs Key');return;}
   document.getElementById('voice-list-content').textContent='查詢中...';

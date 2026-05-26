@@ -540,30 +540,24 @@ function animLoop(){
 // ── VOICE BUTTON ──
 var vbtn=document.getElementById('vbtn');
 
-// Mouse events
-vbtn.addEventListener('mousedown',function(e){
-  e.preventDefault();e.stopPropagation();
+// Use pointerdown/pointerup for unified mouse+touch handling
+vbtn.addEventListener('pointerdown',function(e){
+  e.preventDefault();
+  vbtn.setPointerCapture(e.pointerId);
   startRec();
 });
-document.addEventListener('mouseup',function(e){
-  if(isRec){e.preventDefault();stopRec();}
+vbtn.addEventListener('pointerup',function(e){
+  e.preventDefault();
+  stopRec();
 });
-
-// Touch events  
-vbtn.addEventListener('touchstart',function(e){
-  e.preventDefault();e.stopPropagation();
-  startRec();
-},{passive:false});
-document.addEventListener('touchend',function(e){
-  if(isRec){e.preventDefault();stopRec();}
-},{passive:false});
-document.addEventListener('touchcancel',function(){
+vbtn.addEventListener('pointercancel',function(e){
   if(isRec)stopRec();
 });
 
 function startRec(){
   if(isBusy)return;
-  if(!recognition)recognition=initRec();
+  // Reset recognition each time for clean state
+  recognition=initRec();
   if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
   stopSpeaking();isRec=true;finalTx='';
   vbtn.classList.add('rec');vbtn.textContent='🔴';
@@ -577,17 +571,13 @@ function startRec(){
 function stopRec(){
   if(!isRec)return;
   isRec=false;
+  // Stop recognition and use whatever we have
   try{if(recognition)recognition.stop();}catch(e){}
   setVIdle();
-  // Small delay to allow final transcript to arrive
-  setTimeout(function(){
-    var text=finalTx.trim();
-    document.getElementById('vtrans').textContent=text||'點擊說話';
-    document.getElementById('vtrans').classList.remove('active');
-    if(text){
-      sendMsg(text);
-    }
-  },300);
+  var text=finalTx.trim();
+  document.getElementById('vtrans').textContent=text||'點擊說話';
+  document.getElementById('vtrans').classList.remove('active');
+  if(text) sendMsg(text);
 }
 
 function setVIdle(){
@@ -599,16 +589,27 @@ function setVIdle(){
 function initRec(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR)return null;
-  var r=new SR();r.lang='zh-TW';r.interimResults=true;r.continuous=false;
+  var r=new SR();
+  r.lang='zh-TW';
+  r.interimResults=true;
+  r.continuous=true; // keep listening while holding
   r.onresult=function(e){
-    var interim='';finalTx='';
-    for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalTx+=e.results[i][0].transcript;else interim+=e.results[i][0].transcript;}
+    var interim='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) finalTx+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
     var d=finalTx||interim;
     document.getElementById('vtrans').textContent=d||'聆聽中...';
     document.getElementById('vtrans').classList.toggle('active',!!d);
   };
-  r.onerror=function(e){console.warn('SR:',e.error);setVIdle();};
-  r.onend=function(){if(isRec){try{r.start();}catch(e){}}};
+  r.onerror=function(e){
+    if(e.error!=='aborted') console.warn('SR:',e.error);
+    if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}
+  };
+  r.onend=function(){
+    if(isRec){try{r.start();}catch(e){}}
+  };
   return r;
 }
 
@@ -622,7 +623,7 @@ function sendMsg(text){
   var tyEl=appendTyping();
   setModelState('thinking');
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][activeChar.distort-1];
-  var sys='你是《感染回聲》AI角色。名稱：'+activeChar.name+'。性格：'+activeChar.traits.join('、')+'。扭曲'+activeChar.distort+'/5（'+dd+'）。人格：'+activeChar.persona+'\n規則：繁體中文，直接入戲，2-4句，最後一行：⟳ 感染紀錄：[一句重新詮釋]';
+  var sys='你現在扮演一個叫「'+activeChar.name+'」的朋友，正在和用戶聊天八卦。\n\n你的個性：'+activeChar.persona+'\n\n聊天規則：\n- 用繁體中文，口語化，像真朋友在聊天\n- 回應要自然，針對對方說的話有反應，可以追問或發表看法\n- 不要說教，不要講大道理，就是聊天\n- 2-3句話就好，不要太長\n- 根據你的個性，把對方說的話用你自己的角度重新詮釋或扭曲\n- 最後一行固定格式：⟳ 感染紀錄：[你在心裡怎麼理解這句話，一句話]';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:chatHistory})})
   .then(function(r){return r.json();})
   .then(function(data){

@@ -310,13 +310,23 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   </div>
 </div>
 
-<!-- THREE.JS (non-module for compatibility) -->
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://unpkg.com/meshoptimizer@0.20.0/meshopt_decoder.js"></script>
+<!-- THREE.JS via importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MeshoptDecoder } from 'https://unpkg.com/meshoptimizer@0.20.0/meshopt_decoder.module.js';
+await MeshoptDecoder.ready;
+
 // ═══════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════
@@ -392,7 +402,7 @@ function initThree(){
   threeClock=new THREE.Clock();
 
   // Orbit controls (limited)
-  var controls=new THREE.OrbitControls(threeCamera,canvas);
+  var controls=new OrbitControls(threeCamera,canvas);
   controls.enableDamping=true;
   controls.dampingFactor=0.06;
   controls.minDistance=1.5;
@@ -417,12 +427,9 @@ function loadCharModel(colorKey){
   var pal=PALETTES[colorKey]||PALETTES.anxiety;
   applyPalette(pal);
 
-  var loader=new THREE.GLTFLoader();
+  var loader=new GLTFLoader();
   // Set meshopt decoder
-  if(typeof MeshoptDecoder!=='undefined'){
-    THREE.GLTFLoader.setMeshoptDecoder=function(){};
-    loader.setMeshoptDecoder(MeshoptDecoder);
-  }
+  loader.setMeshoptDecoder(MeshoptDecoder);
 
   loader.load('base_basic_shaded-v1.glb',
     function(gltf){
@@ -496,9 +503,7 @@ function animateThree(){
 function gk(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function sk(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
-document.getElementById('key-submit-btn').addEventListener('click',submitKeys);
-document.getElementById('ki-gemini').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
-document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
+// (moved to DOMContentLoaded)
 
 function submitKeys(){
   var g=document.getElementById('ki-gemini').value.trim();
@@ -518,9 +523,7 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});
   if(id==='screen-chat') setTimeout(function(){if(window._threeControls)window.dispatchEvent(new Event('resize'));},100);
 }
-document.getElementById('setup-close-btn').addEventListener('click',function(){showScreen('screen-select');});
-document.getElementById('goto-setup-btn').addEventListener('click',function(){showScreen('screen-setup');});
-document.getElementById('back-btn').addEventListener('click',goBack);
+// (moved to DOMContentLoaded)
 
 function goBack(){
   stopSpeaking();if(isRec)stopRec();
@@ -546,25 +549,10 @@ function buildTraits(){
   })(i);}
 }
 
-for(var _i=0;_i<3;_i++){(function(i){document.getElementById('ctab-'+i).addEventListener('click',function(){for(var j=0;j<3;j++){document.getElementById('ctab-'+j).classList.toggle('on',j===i);document.getElementById('cpanel-'+j).classList.toggle('on',j===i);}});})(_i);}
+// ctabs bound in DOMContentLoaded
 
 function bindSl(id,vid,dec){var el=document.getElementById(id),vl=document.getElementById(vid);if(!el||!vl)return;el.addEventListener('input',function(){vl.textContent=parseFloat(el.value).toFixed(dec);});}
-for(var _si=0;_si<3;_si++){bindSl('c-distort-'+_si,'dv-'+_si,0);bindSl('c-rate-'+_si,'rv-'+_si,2);bindSl('c-stab-'+_si,'sv-'+_si,2);bindSl('c-sim-'+_si,'smv-'+_si,2);}
-
-// Preview voice
-for(var _pi=0;_pi<3;_pi++){(function(i){
-  document.getElementById('preview-btn-'+i).addEventListener('click',function(){
-    var name=document.getElementById('c-name-'+i).value||'角色';
-    var vname=document.getElementById('c-voice-'+i).value;
-    var rate=parseFloat(document.getElementById('c-rate-'+i).value);
-    var stab=parseFloat(document.getElementById('c-stab-'+i).value);
-    var sim=parseFloat(document.getElementById('c-sim-'+i).value);
-    elevenSpeak('你好，我是'+name+'，這是語音測試。',vname,rate,stab,sim,null);
-  });
-})(_pi);}
-
-// Save char
-for(var _svi=0;_svi<3;_svi++){(function(i){document.getElementById('save-'+i).addEventListener('click',function(){saveChar(i);});})(_svi);}
+// sliders, previews, saves bound in DOMContentLoaded
 
 function saveChar(i){
   if(!db){alert('請先連線');return;}
@@ -655,13 +643,7 @@ function enterRole(idx,charData){
 // ═══════════════════════════════════════
 //  VOICE BUTTON
 // ═══════════════════════════════════════
-var vbtn=document.getElementById('vbtn');
-vbtn.addEventListener('mousedown',function(e){e.preventDefault();startRec();});
-vbtn.addEventListener('mouseup',function(e){e.preventDefault();stopRec();});
-vbtn.addEventListener('mouseleave',function(){if(isRec)stopRec();});
-vbtn.addEventListener('touchstart',function(e){e.preventDefault();startRec();},{passive:false});
-vbtn.addEventListener('touchend',function(e){e.preventDefault();stopRec();},{passive:false});
-vbtn.addEventListener('touchcancel',function(){if(isRec)stopRec();});
+var vbtn=document.getElementById("vbtn"); // bound in DOMContentLoaded
 
 function startRec(){
   if(isBusy)return;
@@ -749,9 +731,16 @@ async function getVoiceId(name){
   try{
     var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
     var data=await resp.json();
-    if(data.voices)data.voices.forEach(function(v){voiceIdCache[v.name]=v.voice_id;});
+    if(data.voices){
+      data.voices.forEach(function(v){voiceIdCache[v.name]=v.voice_id;});
+      // Also try partial match
+      if(!voiceIdCache[name]){
+        var match=data.voices.find(function(v){return v.name.toLowerCase().indexOf(name.toLowerCase())>=0||name.toLowerCase().indexOf(v.name.toLowerCase())>=0;});
+        if(match)voiceIdCache[name]=match.voice_id;
+      }
+    }
     return voiceIdCache[name]||null;
-  }catch(e){return null;}
+  }catch(e){console.warn('getVoiceId error:',e);return null;}
 }
 
 async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
@@ -827,13 +816,39 @@ function showNotif(msg){
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 
 // ═══════════════════════════════════════
-//  INIT
+//  INIT — expose needed globals
 // ═══════════════════════════════════════
-buildTraits();
-speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};
-speechSynthesis.getVoices();
+// Make functions accessible from HTML onclick attributes  
+window.goBack = goBack;
+window.showScreen = showScreen;
 
-window.addEventListener('load',function(){
+// All init inside DOMContentLoaded for module scope
+document.addEventListener('DOMContentLoaded', function(){
+  buildTraits();
+  speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};
+  speechSynthesis.getVoices();
+
+  // Bind all buttons
+  document.getElementById('key-submit-btn').addEventListener('click',submitKeys);
+  document.getElementById('ki-gemini').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
+  document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
+  document.getElementById('setup-close-btn').addEventListener('click',function(){showScreen('screen-select');});
+  document.getElementById('goto-setup-btn').addEventListener('click',function(){showScreen('screen-setup');});
+  document.getElementById('back-btn').addEventListener('click',goBack);
+
+  for(var _i2=0;_i2<3;_i2++){(function(i){document.getElementById('ctab-'+i).addEventListener('click',function(){for(var j=0;j<3;j++){document.getElementById('ctab-'+j).classList.toggle('on',j===i);document.getElementById('cpanel-'+j).classList.toggle('on',j===i);}});})(_i2);}
+  for(var _si2=0;_si2<3;_si2++){bindSl('c-distort-'+_si2,'dv-'+_si2,0);bindSl('c-rate-'+_si2,'rv-'+_si2,2);bindSl('c-stab-'+_si2,'sv-'+_si2,2);bindSl('c-sim-'+_si2,'smv-'+_si2,2);}
+  for(var _pi2=0;_pi2<3;_pi2++){(function(i){document.getElementById('preview-btn-'+i).addEventListener('click',function(){var name=document.getElementById('c-name-'+i).value||'角色';var vname=document.getElementById('c-voice-'+i).value;var rate=parseFloat(document.getElementById('c-rate-'+i).value);var stab=parseFloat(document.getElementById('c-stab-'+i).value);var sim=parseFloat(document.getElementById('c-sim-'+i).value);elevenSpeak('你好，我是'+name+'，這是語音測試。',vname,rate,stab,sim,null);});})(_pi2);}
+  for(var _svi2=0;_svi2<3;_svi2++){(function(i){document.getElementById('save-'+i).addEventListener('click',function(){saveChar(i);});})(_svi2);}
+
+  var vbtn2=document.getElementById('vbtn');
+  vbtn2.addEventListener('mousedown',function(e){e.preventDefault();startRec();});
+  vbtn2.addEventListener('mouseup',function(e){e.preventDefault();stopRec();});
+  vbtn2.addEventListener('mouseleave',function(){if(isRec)stopRec();});
+  vbtn2.addEventListener('touchstart',function(e){e.preventDefault();startRec();},{passive:false});
+  vbtn2.addEventListener('touchend',function(e){e.preventDefault();stopRec();},{passive:false});
+  vbtn2.addEventListener('touchcancel',function(){if(isRec)stopRec();});
+
   var g=gk('ie_gk'),el=gk('ie_ek');
   if(g&&el){geminiKey=g;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}
 });

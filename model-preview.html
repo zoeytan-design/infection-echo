@@ -123,7 +123,7 @@ let clock = new THREE.Clock();
 
 window.loadModel = function(type) {
   if (currentModel) { scene.remove(currentModel); currentModel = null; mixer = null; }
-  const url = type === 'pbr' ? 'base_basic_pbr.glb' : 'base_basic_shaded.glb';
+  const url = type === 'pbr' ? 'base_basic_pbr-v1.glb' : 'base_basic_shaded-v1.glb';
   status.textContent = `載入 ${type.toUpperCase()} 模型中...`;
 
   loader.load(url,

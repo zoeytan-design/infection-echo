@@ -220,6 +220,24 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 </style>
 </head>
 <body>
+<script>
+// Shim — these functions are defined later in the main script block
+// but onclick attributes need them available immediately.
+// We use a queue pattern: if called before ready, queue and replay after load.
+var _shimQueue = [];
+function submitKeys(){if(window._submitKeys)window._submitKeys();else _shimQueue.push('submitKeys');}
+function enterMockMode(){if(window._enterMockMode)window._enterMockMode();else _shimQueue.push('enterMockMode');}
+function showScreen(id){if(window._showScreen)window._showScreen(id);else _shimQueue.push(['showScreen',id]);}
+function goBack(){if(window._goBack)window._goBack();else _shimQueue.push('goBack');}
+function switchTab(i){if(window._switchTab)window._switchTab(i);else _shimQueue.push(['switchTab',i]);}
+function saveHost(i){if(window._saveHost)window._saveHost(i);else _shimQueue.push(['saveHost',i]);}
+function previewVoice(i){if(window._previewVoice)window._previewVoice(i);else _shimQueue.push(['previewVoice',i]);}
+function startInfection(){if(window._startInfection)window._startInfection();else _shimQueue.push('startInfection');}
+function toggleVoiceOutput(){if(window._toggleVoiceOutput)window._toggleVoiceOutput();else _shimQueue.push('toggleVoiceOutput');}
+function fetchVoiceList(){if(window._fetchVoiceList)window._fetchVoiceList();else _shimQueue.push('fetchVoiceList');}
+function testElevenLabs(){if(window._testElevenLabs)window._testElevenLabs();else _shimQueue.push('testElevenLabs');}
+function speakFinalEcho(t){if(window._speakFinalEcho)window._speakFinalEcho(t);else _shimQueue.push(['speakFinalEcho',t]);}
+</script>
 <div class="scanline"></div>
 
 <!-- KEY OVERLAY -->

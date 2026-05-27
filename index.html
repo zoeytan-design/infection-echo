@@ -654,6 +654,26 @@ function initRec(){
 }
 
 // ── GEMINI ──
+function cleanReply(raw){
+  // Strip Gemini thinking/reasoning that leaks into output
+  var lines=raw.split('\n');
+  var cleaned=[];
+  var skip=false;
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    // Skip thinking headers and English meta-text
+    if(/^(SCENE|INITIAL THOUGHTS|My character|How to distort|The user is|Attributes:|Step \d)/i.test(line.trim()))continue;
+    if(/^\d+\.\s+\*\*/i.test(line.trim()))continue;
+    if(/^(\*\*|---)/i.test(line.trim()))continue;
+    // Skip lines that are clearly internal reasoning in English
+    if(line.trim().length>0 && /^[A-Za-z\*\"\']/.test(line.trim()) && !/^⟳/.test(line.trim()))continue;
+    cleaned.push(line);
+  }
+  var result=cleaned.join('\n').trim();
+  // If everything got stripped, return original
+  return result||raw.trim();
+}
+
 function sendMsg(text){
   if(!activeChar||isBusy)return;
   if(!geminiKey){showNotif('Gemini Key 未設定');return;}
@@ -663,18 +683,19 @@ function sendMsg(text){
   var tyEl=appendTyping();
   setModelState('thinking');
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][activeChar.distort-1];
-  var sys='你現在扮演一個叫「'+activeChar.name+'」的朋友，正在和用戶聊天八卦。\n\n你的個性：'+activeChar.persona+'\n\n聊天規則：\n- 用繁體中文，口語化，像真朋友在聊天\n- 回應要自然，針對對方說的話有反應，可以追問或發表看法\n- 不要說教，不要講大道理，就是聊天\n- 2-3句話就好，不要太長\n- 根據你的個性，把對方說的話用你自己的角度重新詮釋或扭曲\n- 最後一行固定格式：⟳ 感染紀錄：[你在心裡怎麼理解這句話，一句話]';
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:chatHistory})})
+  var sys='你現在扮演一個叫「'+activeChar.name+'」的朋友，正在和用戶聊天八卦。\n\n你的個性：'+activeChar.persona+'\n\n【重要規則】\n- 直接用繁體中文回覆角色的台詞，不要輸出任何英文\n- 不要輸出思考過程、分析、推理步驟、場景描述\n- 不要輸出 SCENE、THOUGHTS、attributes 等標題\n- 只輸出角色說的話，就像真的在聊天一樣\n- 口語化，像真朋友在聊天\n- 回應要自然，針對對方說的話有反應，可以追問或發表看法\n- 不要說教，不要講大道理\n- 2-3句話就好，不要太長\n- 根據你的個性，把對方說的話用你自己的角度重新詮釋或扭曲\n- 最後一行固定格式：⟳ 感染紀錄：[你在心裡怎麼理解這句話，一句話]\n\n範例回覆格式：\n欸你還好嗎？你該不會出什麼事了吧？我覺得你不太對勁耶。\n⟳ 感染紀錄：他可能遇到了什麼嚴重的問題在求助';
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:chatHistory,generationConfig:{temperature:0.8}})})
   .then(function(r){return r.json();})
   .then(function(data){
     if(tyEl&&tyEl.parentNode)tyEl.parentNode.removeChild(tyEl);
     if(data.error){showNotif('API錯誤:'+data.error.message);isBusy=false;setModelState('idle');return;}
-    var reply=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'（訊號中斷）';
+    var rawReply=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'（訊號中斷）';
+    var reply=cleanReply(rawReply);
     chatHistory.push({role:'model',parts:[{text:reply}]});
     appendMsg('ai',reply,activeChar.name,activeChar.emoji,activeChar.distort);
     speakReply(reply);
   })
-  .catch(function(err){tyEl.remove();showNotif('連線錯誤:'+err.message);isBusy=false;setModelState('idle');});
+  .catch(function(err){if(tyEl&&tyEl.parentNode)tyEl.parentNode.removeChild(tyEl);showNotif('連線錯誤:'+err.message);isBusy=false;setModelState('idle');});
 }
 
 // ── ELEVENLABS ──

@@ -302,7 +302,7 @@ var RC=['c1','c2','c3'];
 // ── STATE ──
 var db=null,geminiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,chatHistory=[],isBusy=false,presenceRef=null;
-var recognition=null,isRec=false,finalTx='',charsData={};
+var recognition=null,isRec=false,finalTx='',liveTx='',charsData={};
 var voiceCache={};
 
 // Three.js
@@ -553,63 +553,103 @@ vbtn.addEventListener('pointerup',function(e){
 vbtn.addEventListener('pointercancel',function(e){
   if(isRec)stopRec();
 });
+vbtn.addEventListener('lostpointercapture',function(e){
+  if(isRec)stopRec();
+});
+vbtn.addEventListener('pointerleave',function(e){
+  if(isRec)stopRec();
+});
 
 function startRec(){
   if(isBusy)return;
-  // Reset recognition each time for clean state
+
+  // 每次開始錄音都重新初始化 recognition
   recognition=initRec();
-  if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
-  stopSpeaking();isRec=true;finalTx='';
-  vbtn.classList.add('rec');vbtn.textContent='🔴';
+  if(!recognition){
+    showNotif('此瀏覽器不支援語音輸入');
+    return;
+  }
+
+  stopSpeaking();
+  isRec=true;
+  finalTx='';
+  liveTx='';
+
+  vbtn.classList.add('rec');
+  vbtn.textContent='🔴';
   document.getElementById('vhint').textContent='放開發送';
   document.getElementById('vtrans').textContent='聆聽中...';
   document.getElementById('vtrans').classList.add('active');
-  document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
-  try{recognition.start();}catch(e){}
+  document.getElementById('vr1').classList.add('rec');
+  document.getElementById('vr2').classList.add('rec');
+
+  try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
 }
 
 function stopRec(){
   if(!isRec)return;
   isRec=false;
-  // Stop recognition and use whatever we have
-  try{if(recognition)recognition.stop();}catch(e){}
+
+  try{if(recognition)recognition.stop();}catch(e){console.warn('recognition stop failed:',e);}
+
   setVIdle();
-  var text=finalTx.trim();
+
+  // 重點修正：讀 liveTx（final + interim），不只讀 finalTx
+  var text=(liveTx||finalTx).trim();
+
   document.getElementById('vtrans').textContent=text||'點擊說話';
   document.getElementById('vtrans').classList.remove('active');
-  if(text) sendMsg(text);
+
+  if(text){
+    sendMsg(text);
+  }else{
+    showNotif('沒有偵測到語音內容，請再說一次');
+  }
 }
 
 function setVIdle(){
   vbtn.classList.remove('rec','speaking');vbtn.textContent='🎙';
   document.getElementById('vhint').textContent='點擊開始 · 放開發送';
-  document.getElementById('vr1').classList.remove('rec');document.getElementById('vr2').classList.remove('rec');
+  document.getElementById('vr1').classList.remove('rec');
+  document.getElementById('vr2').classList.remove('rec');
 }
 
 function initRec(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR)return null;
+
   var r=new SR();
   r.lang='zh-TW';
   r.interimResults=true;
-  r.continuous=true; // keep listening while holding
+  r.continuous=true;
+
   r.onresult=function(e){
     var interim='';
     for(var i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) finalTx+=e.results[i][0].transcript;
-      else interim+=e.results[i][0].transcript;
+      var tx=e.results[i][0].transcript;
+      if(e.results[i].isFinal){
+        finalTx+=tx;
+      }else{
+        interim+=tx;
+      }
     }
-    var d=finalTx||interim;
-    document.getElementById('vtrans').textContent=d||'聆聽中...';
-    document.getElementById('vtrans').classList.toggle('active',!!d);
+    // 保存 final + interim 的全部內容
+    liveTx=(finalTx+interim).trim();
+    document.getElementById('vtrans').textContent=liveTx||'聆聽中...';
+    document.getElementById('vtrans').classList.toggle('active',!!liveTx);
   };
+
   r.onerror=function(e){
-    if(e.error!=='aborted') console.warn('SR:',e.error);
-    if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}
+    if(e.error!=='aborted')console.warn('SR:',e.error);
+    if(e.error==='no-speech'&&isRec){
+      try{r.start();}catch(err){}
+    }
   };
+
   r.onend=function(){
     if(isRec){try{r.start();}catch(e){}}
   };
+
   return r;
 }
 

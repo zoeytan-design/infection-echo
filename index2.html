@@ -89,8 +89,10 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .setup-trig button{background:none;border:none;color:var(--text-muted);font-family:var(--mono);font-size:10px;letter-spacing:0.15em;cursor:pointer;padding:8px 16px;}
 #screen-chat{padding:0;background:#050508;align-items:center;justify-content:center;overflow:hidden;}
 .chat-phone{position:relative;height:100dvh;max-height:100dvh;aspect-ratio:928/1600;max-width:100vw;background:#111;overflow:hidden;box-shadow:0 0 50px rgba(0,0,0,0.65);}
-.chat-scene{position:absolute;inset:0;background-size:cover;background-position:center center;background-repeat:no-repeat;}
-.chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;}
+.chat-scene{position:absolute;inset:0;background:#111;overflow:hidden;}
+.chat-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;}
+.chat-scene.bg-ready .chat-bg-img{display:block;}
+.chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;z-index:2;}
 .ai-bubble-text{position:absolute;left:9.2%;top:18.3%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:#2b2724;font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:none;scrollbar-width:thin;}
 .ai-bubble-text.empty{color:rgba(43,39,36,0.38);font-weight:500;}
 .ai-bubble-text.thinking{color:rgba(43,39,36,0.62);font-weight:700;}
@@ -253,6 +255,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <div class="screen hidden" id="screen-chat">
   <div class="chat-phone">
     <div class="chat-scene" id="chat-scene">
+      <img class="chat-bg-img" id="chat-bg-img" alt=""/>
       <button class="chat-back-float" onclick="goBack()">← 返回</button>
       <div class="ai-bubble-text empty" id="ai-bubble-text">點擊下方按鈕開始對話</div>
       <div class="vzone">
@@ -452,61 +455,88 @@ function uniqueList(arr){
   return out;
 }
 
+function stripQueryHash(url){
+  return String(url||'').split('#')[0].split('?')[0];
+}
+
+function getPageDir(url){
+  var clean=stripQueryHash(url);
+  if(/\/$/.test(clean))return clean;
+  var last=clean.split('/').pop()||'';
+  // 如果最後一段像檔名，取所在資料夾；如果像 repo 名稱，補上斜線
+  if(last.indexOf('.')>=0)return clean.replace(/\/[^\/]*$/,'/');
+  return clean+'/';
+}
+
+function parseGithubBlobUrl(url){
+  var m=String(url||'').match(/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.*)$/);
+  if(!m)return null;
+  return {user:m[1],repo:m[2],branch:m[3],path:m[4]||''};
+}
+
+function addGithubRawCandidates(candidates,info,fileName){
+  if(!info)return;
+  var dir=(info.path||'').replace(/[^\/]*$/,'');
+  // assets 在 HTML 同層
+  candidates.push('https://raw.githubusercontent.com/'+info.user+'/'+info.repo+'/'+info.branch+'/'+dir+'assets/'+fileName);
+  candidates.push('https://cdn.jsdelivr.net/gh/'+info.user+'/'+info.repo+'@'+info.branch+'/'+dir+'assets/'+fileName);
+  // assets 在 repo 根目錄
+  candidates.push('https://raw.githubusercontent.com/'+info.user+'/'+info.repo+'/'+info.branch+'/assets/'+fileName);
+  candidates.push('https://cdn.jsdelivr.net/gh/'+info.user+'/'+info.repo+'@'+info.branch+'/assets/'+fileName);
+}
+
 function getGitHubAssetCandidates(fileName){
   var href=window.location.href;
   var origin=window.location.origin||'';
   var path=window.location.pathname||'/';
-  var base=document.baseURI||href;
+  var pageDir=getPageDir(href);
   var candidates=[];
 
-  function add(u){
-    try{
-      candidates.push(new URL(u,base).href);
-    }catch(e){
-      candidates.push(u);
-    }
-  }
+  function add(u){ if(u)candidates.push(u); }
 
-  // 1) 最常見：HTML 和 assets 資料夾在同一層
-  add('./assets/'+fileName);
+  // 1) 最先用相對路徑，最適合 GitHub Pages / 本機 / 一般網站
   add('assets/'+fileName);
+  add('./assets/'+fileName);
+  add(pageDir+'assets/'+fileName);
 
-  // 2) HTML 被放在子資料夾，但 assets 在 GitHub Pages repo 根目錄
-  // 例如：https://username.github.io/repo-name/pages/index.html
-  // 會嘗試：https://username.github.io/repo-name/assets/-A.png
+  // 2) GitHub Pages project site：username.github.io/repo-name/...
   var parts=path.split('/').filter(Boolean);
   if(origin&&parts.length>0){
     add(origin+'/'+parts[0]+'/assets/'+fileName);
   }
 
-  // 3) GitHub Pages user site 根目錄情況
+  // 3) GitHub Pages user site 或自訂網域根目錄
   if(origin){
     add(origin+'/assets/'+fileName);
   }
 
-  // 4) 如果你是用 github.com/.../blob/... 方式預覽，改抓 raw 圖片
-  var blobMatch=href.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/);
-  if(blobMatch){
-    add('https://raw.githubusercontent.com/'+blobMatch[1]+'/'+blobMatch[2]+'/'+blobMatch[3]+'/assets/'+fileName);
-    add('https://cdn.jsdelivr.net/gh/'+blobMatch[1]+'/'+blobMatch[2]+'@'+blobMatch[3]+'/assets/'+fileName);
+  // 4) 如果 HTML 是從 github.com/.../blob/... 開啟
+  addGithubRawCandidates(candidates,parseGithubBlobUrl(href),fileName);
+
+  // 5) 如果是 htmlpreview.github.io 或其他 preview 工具，GitHub 原網址通常在 query/hash 裡
+  var decoded=decodeURIComponent((window.location.search||'')+' '+(window.location.hash||''));
+  var qMatch=decoded.match(/https?:\/\/github\.com\/[^\s#?]+\/[^\s#?]+\/blob\/[^\s#?]+\/[^\s#?]+/);
+  if(qMatch){
+    addGithubRawCandidates(candidates,parseGithubBlobUrl(qMatch[0]),fileName);
   }
 
-  // 5) 如果 HTML 是從 raw.githubusercontent.com 開啟，圖片也用 raw 路徑
-  var rawMatch=href.match(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/);
-  if(rawMatch){
-    add('https://raw.githubusercontent.com/'+rawMatch[1]+'/'+rawMatch[2]+'/'+rawMatch[3]+'/assets/'+fileName);
-    add('https://cdn.jsdelivr.net/gh/'+rawMatch[1]+'/'+rawMatch[2]+'@'+rawMatch[3]+'/assets/'+fileName);
+  // 6) 如果 HTML 是從 raw.githubusercontent.com 開啟
+  var raw=href.match(/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.*)$/);
+  if(raw){
+    var rawInfo={user:raw[1],repo:raw[2],branch:raw[3],path:raw[4]||''};
+    addGithubRawCandidates(candidates,rawInfo,fileName);
   }
 
-  // 6) 如果你透過 htmlpreview.github.io 開 github 檔案，從 query 抓 repo 資訊
-  var q=decodeURIComponent(window.location.search||'');
-  var qBlob=q.match(/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/\?&]+)\//);
-  if(qBlob){
-    add('https://raw.githubusercontent.com/'+qBlob[1]+'/'+qBlob[2]+'/'+qBlob[3]+'/assets/'+fileName);
-    add('https://cdn.jsdelivr.net/gh/'+qBlob[1]+'/'+qBlob[2]+'@'+qBlob[3]+'/assets/'+fileName);
+  // 7) 如果 HTML 是從 cdn.jsdelivr.net/gh/user/repo@branch/... 開啟
+  var jsd=href.match(/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^@\/]+)@([^\/]+)\/(.*)$/);
+  if(jsd){
+    var dir=(jsd[4]||'').replace(/[^\/]*$/,'');
+    add('https://cdn.jsdelivr.net/gh/'+jsd[1]+'/'+jsd[2]+'@'+jsd[3]+'/'+dir+'assets/'+fileName);
+    add('https://cdn.jsdelivr.net/gh/'+jsd[1]+'/'+jsd[2]+'@'+jsd[3]+'/assets/'+fileName);
   }
 
-  // 7) 最後才嘗試同資料夾，避免專案結構不同時完全無背景
+  // 8) 最後嘗試與 HTML 同層
+  add(fileName);
   add('./'+fileName);
 
   return uniqueList(candidates);
@@ -514,39 +544,44 @@ function getGitHubAssetCandidates(fileName){
 
 function setChatBackground(idx){
   var sceneEl=document.getElementById('chat-scene');
-  if(!sceneEl)return;
+  var bgImg=document.getElementById('chat-bg-img');
+  if(!sceneEl||!bgImg)return;
+
+  sceneEl.classList.remove('bg-ready');
+  bgImg.removeAttribute('src');
+  bgImg.style.display='none';
 
   var fileName=CHAT_BG_FILES[idx]||CHAT_BG_FILES[0];
   var candidates=getGitHubAssetCandidates(fileName);
+  console.log('準備載入背景圖：',fileName,candidates);
 
   var tryIndex=0;
   function tryNext(){
     if(tryIndex>=candidates.length){
       console.warn('背景圖載入失敗，已嘗試路徑：',candidates);
-      sceneEl.style.backgroundImage='linear-gradient(180deg,#5b321f,#15110e)';
-      showNotif('背景圖載入失敗：請確認圖片在 assets/'+fileName);
+      sceneEl.style.background='linear-gradient(180deg,#5b321f,#15110e)';
+      showNotif('背景圖載入失敗：請確認 assets/'+fileName+' 已經和 HTML 一起上傳到 GitHub');
       return;
     }
 
     var bg=candidates[tryIndex++];
-    var img=new Image();
-    img.onload=function(){
-      sceneEl.style.backgroundImage='url("'+bg+'")';
+    var tester=new Image();
+    tester.onload=function(){
+      bgImg.src=bg;
+      bgImg.style.display='block';
+      sceneEl.classList.add('bg-ready');
       sceneEl.dataset.bg=bg;
       console.log('背景圖載入成功：',bg);
     };
-    img.onerror=function(){
+    tester.onerror=function(){
       console.warn('背景圖路徑失敗：',bg);
       tryNext();
     };
-    img.src=bg;
+    // 加 timestamp 避免 GitHub Pages / browser cache 還抓到舊路徑狀態
+    tester.src=bg+(bg.indexOf('?')>=0?'&':'?')+'v='+Date.now();
   }
 
   tryNext();
-}
-
-function getMainReplyText(fullText){
-  return String(fullText||'').replace(/⟳ 感染紀錄：[\s\S]+$/,'').trim();
 }
 
 function setBubbleText(text,state){

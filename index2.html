@@ -275,7 +275,9 @@ var PALETTES={anxiety:{key:0xc080ff,fill:0x4040ff,rim:0xffffff,glow:0x8844ff},an
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
-var CHAT_BACKGROUNDS=['/assets/-C.png','/assets/-B.png','/assets/-A.png'];
+// GitHub / GitHub Pages friendly background mapping
+// node0 = 攻擊者圖, node1 = 煽動者圖, node2 = 密謀者圖
+var CHAT_BG_FILES=['-C.png','-B.png','-A.png'];
 
 // ── STATE ──
 var db=null,geminiKey='',elevenKey='';
@@ -442,11 +444,105 @@ function enterRole(idx,charData){
 }
 
 // ── CHAT VISUAL UI ──
+function uniqueList(arr){
+  var out=[];
+  arr.forEach(function(v){
+    if(v&&out.indexOf(v)===-1)out.push(v);
+  });
+  return out;
+}
+
+function getGitHubAssetCandidates(fileName){
+  var href=window.location.href;
+  var origin=window.location.origin||'';
+  var path=window.location.pathname||'/';
+  var base=document.baseURI||href;
+  var candidates=[];
+
+  function add(u){
+    try{
+      candidates.push(new URL(u,base).href);
+    }catch(e){
+      candidates.push(u);
+    }
+  }
+
+  // 1) 最常見：HTML 和 assets 資料夾在同一層
+  add('./assets/'+fileName);
+  add('assets/'+fileName);
+
+  // 2) HTML 被放在子資料夾，但 assets 在 GitHub Pages repo 根目錄
+  // 例如：https://username.github.io/repo-name/pages/index.html
+  // 會嘗試：https://username.github.io/repo-name/assets/-A.png
+  var parts=path.split('/').filter(Boolean);
+  if(origin&&parts.length>0){
+    add(origin+'/'+parts[0]+'/assets/'+fileName);
+  }
+
+  // 3) GitHub Pages user site 根目錄情況
+  if(origin){
+    add(origin+'/assets/'+fileName);
+  }
+
+  // 4) 如果你是用 github.com/.../blob/... 方式預覽，改抓 raw 圖片
+  var blobMatch=href.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.+)$/);
+  if(blobMatch){
+    add('https://raw.githubusercontent.com/'+blobMatch[1]+'/'+blobMatch[2]+'/'+blobMatch[3]+'/assets/'+fileName);
+    add('https://cdn.jsdelivr.net/gh/'+blobMatch[1]+'/'+blobMatch[2]+'@'+blobMatch[3]+'/assets/'+fileName);
+  }
+
+  // 5) 如果 HTML 是從 raw.githubusercontent.com 開啟，圖片也用 raw 路徑
+  var rawMatch=href.match(/^https?:\/\/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.+)$/);
+  if(rawMatch){
+    add('https://raw.githubusercontent.com/'+rawMatch[1]+'/'+rawMatch[2]+'/'+rawMatch[3]+'/assets/'+fileName);
+    add('https://cdn.jsdelivr.net/gh/'+rawMatch[1]+'/'+rawMatch[2]+'@'+rawMatch[3]+'/assets/'+fileName);
+  }
+
+  // 6) 如果你透過 htmlpreview.github.io 開 github 檔案，從 query 抓 repo 資訊
+  var q=decodeURIComponent(window.location.search||'');
+  var qBlob=q.match(/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/\?&]+)\//);
+  if(qBlob){
+    add('https://raw.githubusercontent.com/'+qBlob[1]+'/'+qBlob[2]+'/'+qBlob[3]+'/assets/'+fileName);
+    add('https://cdn.jsdelivr.net/gh/'+qBlob[1]+'/'+qBlob[2]+'@'+qBlob[3]+'/assets/'+fileName);
+  }
+
+  // 7) 最後才嘗試同資料夾，避免專案結構不同時完全無背景
+  add('./'+fileName);
+
+  return uniqueList(candidates);
+}
+
 function setChatBackground(idx){
   var sceneEl=document.getElementById('chat-scene');
   if(!sceneEl)return;
-  var bg=CHAT_BACKGROUNDS[idx]||CHAT_BACKGROUNDS[0];
-  sceneEl.style.backgroundImage='url("'+bg+'")';
+
+  var fileName=CHAT_BG_FILES[idx]||CHAT_BG_FILES[0];
+  var candidates=getGitHubAssetCandidates(fileName);
+
+  var tryIndex=0;
+  function tryNext(){
+    if(tryIndex>=candidates.length){
+      console.warn('背景圖載入失敗，已嘗試路徑：',candidates);
+      sceneEl.style.backgroundImage='linear-gradient(180deg,#5b321f,#15110e)';
+      showNotif('背景圖載入失敗：請確認圖片在 assets/'+fileName);
+      return;
+    }
+
+    var bg=candidates[tryIndex++];
+    var img=new Image();
+    img.onload=function(){
+      sceneEl.style.backgroundImage='url("'+bg+'")';
+      sceneEl.dataset.bg=bg;
+      console.log('背景圖載入成功：',bg);
+    };
+    img.onerror=function(){
+      console.warn('背景圖路徑失敗：',bg);
+      tryNext();
+    };
+    img.src=bg;
+  }
+
+  tryNext();
 }
 
 function getMainReplyText(fullText){

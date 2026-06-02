@@ -87,50 +87,31 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .rc:hover .ra{transform:translateX(4px);color:var(--accent);}
 .setup-trig{margin-top:24px;text-align:center;}
 .setup-trig button{background:none;border:none;color:var(--text-muted);font-family:var(--mono);font-size:10px;letter-spacing:0.15em;cursor:pointer;padding:8px 16px;}
-#screen-chat{flex-direction:column;justify-content:space-between;padding:0;}
-.chat-top{width:100%;padding:14px 20px 10px;display:flex;align-items:center;gap:12px;border-bottom:0.5px solid var(--border);flex-shrink:0;position:relative;z-index:20;}
-.cav{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--accent-dim);border:1px solid var(--accent-border);}
-.cn{font-family:var(--serif);font-size:15px;color:#e0d8ff;}
-.cs{font-size:10px;color:var(--text-dim);margin-top:2px;}
-.pdot{width:7px;height:7px;border-radius:50%;background:rgba(80,220,120,0.8);box-shadow:0 0 6px rgba(80,220,120,0.4);animation:blink 2s infinite;margin-left:auto;flex-shrink:0;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
-.back-btn{background:none;border:none;color:var(--text-dim);font-family:var(--mono);font-size:12px;cursor:pointer;padding:4px 8px;margin-left:8px;}
-#model-viewport{width:100%;flex:1;position:relative;overflow:hidden;}
-#three-canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
-.chat-msgs-wrap{position:absolute;bottom:0;left:0;right:0;max-height:45%;overflow-y:auto;padding:12px 16px;background:linear-gradient(transparent,rgba(5,5,8,0.88) 25%);display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.04) transparent;}
-.model-lbl{position:absolute;top:12px;left:50%;transform:translateX(-50%);font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:0.2em;pointer-events:none;}
-.msg{display:flex;gap:8px;animation:mi 0.3s ease;width:100%;}
-.msg.user{flex-direction:row-reverse;}
-@keyframes mi{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-.mav{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
-.msg.user .mav{background:rgba(0,201,167,0.1);border:0.5px solid rgba(0,201,167,0.2);}
-.msg.ai .mav{background:var(--accent-dim);border:0.5px solid var(--accent-border);}
-.mb{display:flex;flex-direction:column;gap:3px;max-width:82%;}
-.mw{font-size:9px;color:var(--text-muted);letter-spacing:0.1em;}
-.msg.user .mw{text-align:right;}
-.bub{border-radius:8px;font-family:var(--serif);font-size:12px;line-height:1.7;padding:8px 12px;}
-.msg.user .bub{background:rgba(0,201,167,0.08);border:0.5px solid rgba(0,201,167,0.2);color:#a8f0e8;}
-.msg.ai .bub{background:rgba(5,5,8,0.75);border:0.5px solid rgba(155,109,255,0.2);color:#ddd0ff;backdrop-filter:blur(4px);}
-.ilog{font-family:var(--mono);font-size:10px;color:rgba(255,79,109,0.5);margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,79,109,0.1);line-height:1.5;}
-.ilbl{font-size:9px;color:rgba(255,79,109,0.3);letter-spacing:0.1em;margin-bottom:2px;}
-.typing-bub{background:rgba(5,5,8,0.75);border:0.5px solid rgba(155,109,255,0.2);border-radius:8px;padding:9px 14px;display:flex;gap:5px;width:fit-content;backdrop-filter:blur(4px);}
-.td{width:5px;height:5px;border-radius:50%;background:rgba(155,109,255,0.5);animation:ta 1.2s infinite;}
-.td:nth-child(2){animation-delay:0.2s;}.td:nth-child(3){animation-delay:0.4s;}
-@keyframes ta{0%,60%,100%{transform:translateY(0);opacity:0.35;}30%{transform:translateY(-4px);opacity:1;}}
-.vzone{width:100%;padding:14px 20px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0;border-top:0.5px solid var(--border);position:relative;z-index:20;}
-.vtrans{font-family:var(--serif);font-size:13px;color:var(--text-dim);text-align:center;min-height:20px;line-height:1.6;max-width:380px;}
+#screen-chat{padding:0;background:#050508;align-items:center;justify-content:center;overflow:hidden;}
+.chat-phone{position:relative;height:100dvh;max-height:100dvh;aspect-ratio:928/1600;max-width:100vw;background:#111;overflow:hidden;box-shadow:0 0 50px rgba(0,0,0,0.65);}
+.chat-scene{position:absolute;inset:0;background-size:cover;background-position:center center;background-repeat:no-repeat;}
+.chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;}
+.ai-bubble-text{position:absolute;left:9.2%;top:18.3%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:#2b2724;font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:none;scrollbar-width:thin;}
+.ai-bubble-text.empty{color:rgba(43,39,36,0.38);font-weight:500;}
+.ai-bubble-text.thinking{color:rgba(43,39,36,0.62);font-weight:700;}
+.ai-bubble-text.thinking::after{content:'';width:0.4em;animation:dotText 1.1s steps(4,end) infinite;}
+@keyframes dotText{0%{content:'';}25%{content:'.';}50%{content:'..';}75%,100%{content:'...';}}
+.chat-back-float{position:absolute;top:14px;right:14px;z-index:30;background:rgba(0,0,0,0.32);border:0.5px solid rgba(255,255,255,0.28);border-radius:999px;color:rgba(255,255,255,0.88);font-family:var(--mono);font-size:11px;cursor:pointer;padding:7px 12px;backdrop-filter:blur(8px);}
+.chat-back-float:active{transform:scale(0.96);}
+.vzone{position:absolute;left:0;right:0;bottom:0;width:100%;padding:12px 20px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;border-top:none;background:linear-gradient(transparent,rgba(5,5,8,0.62) 34%,rgba(5,5,8,0.9));z-index:25;}
+.vtrans{font-family:var(--serif);font-size:13px;color:rgba(255,255,255,0.58);text-align:center;min-height:20px;line-height:1.6;max-width:380px;text-shadow:0 1px 8px rgba(0,0,0,0.55);}
 .vtrans.active{color:var(--teal);}
 .vwrap{position:relative;display:flex;align-items:center;justify-content:center;}
-.vring{position:absolute;border-radius:50%;border:1px solid rgba(155,109,255,0.2);pointer-events:none;animation:rp 2.5s ease-in-out infinite;}
+.vring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,0.24);pointer-events:none;animation:rp 2.5s ease-in-out infinite;}
 .vring:nth-child(1){width:80px;height:80px;}
 .vring:nth-child(2){width:98px;height:98px;animation-delay:0.8s;}
 @keyframes rp{0%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.1);opacity:0.2;}100%{transform:scale(1);opacity:0.5;}}
-.vring.rec{border-color:rgba(0,201,167,0.5);animation:rr 0.8s ease-in-out infinite alternate;}
+.vring.rec{border-color:rgba(0,201,167,0.62);animation:rr 0.8s ease-in-out infinite alternate;}
 @keyframes rr{from{transform:scale(1);opacity:0.6;}to{transform:scale(1.15);opacity:1;}}
-#vbtn{position:relative;z-index:2;width:62px;height:62px;border-radius:50%;background:var(--accent-dim);border:1.5px solid var(--accent-border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all 0.2s;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;}
-#vbtn.rec{background:rgba(0,201,167,0.18);border-color:rgba(0,201,167,0.55);box-shadow:0 0 20px rgba(0,201,167,0.2);}
-#vbtn.speaking{background:rgba(240,165,0,0.12);border-color:rgba(240,165,0,0.4);}
-.vhint{font-size:10px;color:var(--text-muted);letter-spacing:0.12em;text-transform:uppercase;}
+#vbtn{position:relative;z-index:2;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,0.14);border:1.5px solid rgba(255,255,255,0.42);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all 0.2s;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(10px);}
+#vbtn.rec{background:rgba(0,201,167,0.23);border-color:rgba(0,201,167,0.68);box-shadow:0 0 20px rgba(0,201,167,0.25);}
+#vbtn.speaking{background:rgba(240,165,0,0.18);border-color:rgba(240,165,0,0.5);}
+.vhint{font-size:10px;color:rgba(255,255,255,0.54);letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 8px rgba(0,0,0,0.55);}
 .swave{display:flex;align-items:center;gap:3px;height:16px;opacity:0;transition:opacity 0.3s;}
 .swave.on{opacity:1;}
 .wb{width:3px;border-radius:2px;background:var(--gold);animation:wb 0.8s ease-in-out infinite alternate;}
@@ -270,25 +251,20 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 </div>
 
 <div class="screen hidden" id="screen-chat">
-  <div class="chat-top">
-    <div class="cav" id="cc-av">?</div>
-    <div><div class="cn" id="cc-name">—</div><div class="cs" id="cc-sub">—</div></div>
-    <div class="pdot"></div>
-    <button class="back-btn" onclick="goBack()">← 返回</button>
-  </div>
-  <div id="model-viewport">
-    <canvas id="three-canvas"></canvas>
-    <div class="chat-msgs-wrap" id="chat-msgs"></div>
-    <div class="model-lbl" id="model-lbl">待機</div>
-  </div>
-  <div class="vzone">
-    <div class="swave" id="swave"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
-    <div class="vtrans" id="vtrans">點擊說話</div>
-    <div class="vwrap">
-      <div class="vring" id="vr1"></div><div class="vring" id="vr2"></div>
-      <button id="vbtn">🎙</button>
+  <div class="chat-phone">
+    <div class="chat-scene" id="chat-scene">
+      <button class="chat-back-float" onclick="goBack()">← 返回</button>
+      <div class="ai-bubble-text empty" id="ai-bubble-text">點擊下方按鈕開始對話</div>
+      <div class="vzone">
+        <div class="swave" id="swave"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
+        <div class="vtrans" id="vtrans">點擊說話</div>
+        <div class="vwrap">
+          <div class="vring" id="vr1"></div><div class="vring" id="vr2"></div>
+          <button id="vbtn">🎙</button>
+        </div>
+        <div class="vhint" id="vhint">點擊開始 · 放開發送</div>
+      </div>
     </div>
-    <div class="vhint" id="vhint">點擊開始 · 放開發送</div>
   </div>
 </div>
 
@@ -299,6 +275,7 @@ var PALETTES={anxiety:{key:0xc080ff,fill:0x4040ff,rim:0xffffff,glow:0x8844ff},an
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
+var CHAT_BACKGROUNDS=['/assets/-C.png','/assets/-B.png','/assets/-A.png'];
 
 // ── STATE ──
 var db=null,geminiKey='',elevenKey='';
@@ -309,10 +286,8 @@ var voiceList=[];
 var voiceListLoaded=false;
 var voiceListPromise=null;
 
-// Three.js
-var THREE_READY=false;
-var scene,camera,renderer,model,clock,controls3d,keyLight,fillLight,glowMesh;
-var modelState='idle',animT=0;
+// Chat visual state
+var modelState='idle';
 
 // ── UTILS ──
 function gk(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
@@ -348,7 +323,6 @@ function showNotif(msg){
 // ── SCREENS ──
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});
-  if(id==='screen-chat'){setTimeout(function(){if(renderer){var vp=document.getElementById('model-viewport');renderer.setSize(vp.offsetWidth,vp.offsetHeight);camera.aspect=vp.offsetWidth/vp.offsetHeight;camera.updateProjectionMatrix();}},50);}
 }
 
 function goBack(){
@@ -450,14 +424,15 @@ function renderRoleList(data){
 // ── ENTER ROLE ──
 function enterRole(idx,charData){
   activeNodeIdx=idx;activeChar=charData;chatHistory=[];isBusy=false;
-  document.getElementById('cc-av').textContent=charData.emoji;
-  document.getElementById('cc-name').textContent=charData.name;
-  document.getElementById('cc-sub').textContent=charData.traits.join(' · ')+' · 扭曲 '+charData.distort+'/5';
-  document.getElementById('chat-msgs').innerHTML='';
   recognition=null;
+  setChatBackground(idx);
+  setBubbleText('點擊下方按鈕開始對話','empty');
+  document.getElementById('vtrans').textContent='點擊說話';
+  document.getElementById('vtrans').classList.remove('active');
+  document.getElementById('swave').classList.remove('on');
+  setVIdle();
   showScreen('screen-chat');
   preloadCharacterVoice(charData);
-  setTimeout(function(){initThreeIfNeeded();loadModel(charData.colorKey||'anxiety');},100);
   if(db){
     if(presenceRef)presenceRef.remove();
     var sid=Math.random().toString(36).slice(2,8);
@@ -466,105 +441,28 @@ function enterRole(idx,charData){
   }
 }
 
-// ── THREE.JS ──
-function initThreeIfNeeded(){
-  if(THREE_READY)return;
-  if(typeof THREE==='undefined'){setTimeout(initThreeIfNeeded,200);return;}
-  THREE_READY=true;
-  var vp=document.getElementById('model-viewport');
-  var canvas=document.getElementById('three-canvas');
-  var w=vp.offsetWidth,h=vp.offsetHeight;
-
-  scene=new THREE.Scene();
-  scene.fog=new THREE.FogExp2(0x050508,0.06);
-  camera=new THREE.PerspectiveCamera(42,w/h,0.1,100);
-  camera.position.set(0,1.4,3.8);
-
-  renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
-  renderer.setSize(w,h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-  renderer.shadowMap.enabled=true;
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.1;
-
-  scene.add(new THREE.AmbientLight(0xffffff,0.4));
-  keyLight=new THREE.DirectionalLight(0xc080ff,1.4);keyLight.position.set(2,4,3);keyLight.castShadow=true;scene.add(keyLight);
-  fillLight=new THREE.DirectionalLight(0x4040ff,0.5);fillLight.position.set(-3,1,-2);scene.add(fillLight);
-  var rim=new THREE.DirectionalLight(0xffffff,0.8);rim.position.set(0,3,-4);scene.add(rim);
-
-  var gGeo=new THREE.CircleGeometry(1.0,64);
-  var gMat=new THREE.MeshBasicMaterial({color:0x8844ff,transparent:true,opacity:0.1});
-  glowMesh=new THREE.Mesh(gGeo,gMat);glowMesh.rotation.x=-Math.PI/2;glowMesh.position.y=-0.02;scene.add(glowMesh);
-
-  if(typeof THREE.OrbitControls!=='undefined'){
-    controls3d=new THREE.OrbitControls(camera,canvas);
-    controls3d.enableDamping=true;controls3d.dampingFactor=0.06;
-    controls3d.minDistance=1.5;controls3d.maxDistance=6;
-    controls3d.maxPolarAngle=Math.PI*0.65;
-    controls3d.target.set(0,0.9,0);
-  }
-
-  clock=new THREE.Clock();
-  window.addEventListener('resize',function(){
-    if(!renderer)return;
-    var vp2=document.getElementById('model-viewport');
-    var w2=vp2.offsetWidth,h2=vp2.offsetHeight;
-    renderer.setSize(w2,h2);camera.aspect=w2/h2;camera.updateProjectionMatrix();
-  });
-  animLoop();
+// ── CHAT VISUAL UI ──
+function setChatBackground(idx){
+  var sceneEl=document.getElementById('chat-scene');
+  if(!sceneEl)return;
+  var bg=CHAT_BACKGROUNDS[idx]||CHAT_BACKGROUNDS[0];
+  sceneEl.style.backgroundImage='url("'+bg+'")';
 }
 
-function loadModel(colorKey){
-  if(!THREE_READY){setTimeout(function(){loadModel(colorKey);},200);return;}
-  if(model){scene.remove(model);model=null;}
-  var pal=PALETTES[colorKey]||PALETTES.anxiety;
-  keyLight.color.setHex(pal.key);fillLight.color.setHex(pal.fill);glowMesh.material.color.setHex(pal.glow);
+function getMainReplyText(fullText){
+  return String(fullText||'').replace(/⟳ 感染紀錄：[\s\S]+$/,'').trim();
+}
 
-  if(typeof THREE.GLTFLoader==='undefined'){console.warn('GLTFLoader not ready');return;}
-  var loader=new THREE.GLTFLoader();
-  loader.load('base_basic_shaded-v1.glb',function(gltf){
-    model=gltf.scene;
-    var box=new THREE.Box3().setFromObject(model);
-    var size=box.getSize(new THREE.Vector3());
-    var center=box.getCenter(new THREE.Vector3());
-    var scale=2.2/Math.max(size.x,size.y,size.z);
-    model.scale.setScalar(scale);
-    model.position.sub(center.multiplyScalar(scale));
-    model.position.y+=size.y*scale*0.05;
-    model.traverse(function(c){if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
-    scene.add(model);
-  },null,function(e){console.warn('Model error:',e);});
+function setBubbleText(text,state){
+  var el=document.getElementById('ai-bubble-text');
+  if(!el)return;
+  el.classList.remove('empty','thinking','speaking');
+  if(state)el.classList.add(state);
+  el.textContent=text||'';
 }
 
 function setModelState(s){
   modelState=s;
-  var lbl=document.getElementById('model-lbl');
-  if(lbl)lbl.textContent=s==='thinking'?'思考中...':(s==='speaking'?'說話中':'待機');
-}
-
-function animLoop(){
-  requestAnimationFrame(animLoop);
-  if(!scene||!camera||!renderer)return;
-  var dt=clock.getDelta();animT+=dt;
-  if(controls3d)controls3d.update();
-  if(model){
-    if(modelState==='idle'){
-      model.position.y=Math.sin(animT*0.8)*0.025;
-      model.rotation.y=Math.sin(animT*0.3)*0.08;
-      keyLight.intensity=1.4;
-    }else if(modelState==='thinking'){
-      model.rotation.x=Math.sin(animT*1.2)*0.05+0.07;
-      model.position.y=Math.sin(animT*0.5)*0.015-0.04;
-      keyLight.intensity=1.2+Math.sin(animT*8)*0.3;
-    }else if(modelState==='speaking'){
-      model.position.y=Math.abs(Math.sin(animT*4))*0.06;
-      model.rotation.z=Math.sin(animT*3)*0.04;
-      model.rotation.y+=dt*0.6;
-      keyLight.intensity=1.4+Math.sin(animT*6)*0.5;
-      glowMesh.material.opacity=0.1+Math.sin(animT*5)*0.07;
-    }
-  }
-  renderer.render(scene,camera);
 }
 
 // ── VOICE BUTTON ──
@@ -624,10 +522,10 @@ function stopRec(){
 
   setVIdle();
 
-  // 重點修正：讀 liveTx（final + interim），不只讀 finalTx
+  // 不顯示使用者語音轉文字，只用於送出給 Gemini
   var text=(liveTx||finalTx).trim();
 
-  document.getElementById('vtrans').textContent=text||'點擊說話';
+  document.getElementById('vtrans').textContent=text?'已收到語音':'點擊說話';
   document.getElementById('vtrans').classList.remove('active');
 
   if(text){
@@ -663,10 +561,10 @@ function initRec(){
         interim+=tx;
       }
     }
-    // 保存 final + interim 的全部內容
+    // 保存 final + interim 的全部內容，但不把使用者語音文字顯示在畫面上
     liveTx=(finalTx+interim).trim();
-    document.getElementById('vtrans').textContent=liveTx||'聆聽中...';
-    document.getElementById('vtrans').classList.toggle('active',!!liveTx);
+    document.getElementById('vtrans').textContent=liveTx?'正在聆聽...':'聆聽中...';
+    document.getElementById('vtrans').classList.add('active');
   };
 
   r.onerror=function(e){
@@ -708,24 +606,37 @@ function sendMsg(text){
   if(!activeChar||isBusy)return;
   if(!geminiKey){showNotif('Gemini Key 未設定');return;}
   isBusy=true;
-  appendMsg('user',text,'你','🧑',0);
+  setBubbleText('思考中','thinking');
+  document.getElementById('vtrans').textContent='思考中...';
+  document.getElementById('vtrans').classList.add('active');
   chatHistory.push({role:'user',parts:[{text:text}]});
-  var tyEl=appendTyping();
   setModelState('thinking');
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][activeChar.distort-1];
-  var sys='你現在扮演一個叫「'+activeChar.name+'」的朋友，正在和用戶聊天八卦。\n\n你的個性：'+activeChar.persona+'\n\n【重要規則】\n- 直接用繁體中文回覆角色的台詞，不要輸出任何英文\n- 不要輸出思考過程、分析、推理步驟、場景描述\n- 不要輸出 SCENE、THOUGHTS、attributes 等標題\n- 只輸出角色說的話，就像真的在聊天一樣\n- 口語化，像真朋友在聊天\n- 回應要自然，針對對方說的話有反應，可以追問或發表看法\n- 不要說教，不要講大道理\n- 2-3句話就好，不要太長\n- 根據你的個性，把對方說的話用你自己的角度重新詮釋或扭曲\n- 最後一行固定格式：⟳ 感染紀錄：[你在心裡怎麼理解這句話，一句話]\n\n範例回覆格式：\n欸你還好嗎？你該不會出什麼事了吧？我覺得你不太對勁耶。\n⟳ 感染紀錄：他可能遇到了什麼嚴重的問題在求助';
+  var sys='你現在扮演一個叫「'+activeChar.name+'」的朋友，正在和用戶聊天八卦。\n\n你的個性：'+activeChar.persona+'\n\n目前扭曲強度：'+activeChar.distort+'/5，等級說明：'+dd+'。你必須根據這個強度調整你誤解、放大、改寫對方訊息的程度。\n\n【重要規則】\n- 直接用繁體中文回覆角色的台詞，不要輸出任何英文\n- 不要輸出思考過程、分析、推理步驟、場景描述\n- 不要輸出 SCENE、THOUGHTS、attributes 等標題\n- 只輸出角色說的話，就像真的在聊天一樣\n- 口語化，像真朋友在聊天\n- 回應要自然，針對對方說的話有反應，可以追問或發表看法\n- 不要說教，不要講大道理\n- 1-2句話就好，不要太長\n- 根據你的個性，把對方說的話用你自己的角度重新詮釋或扭曲\n- 最後一行固定格式：⟳ 感染紀錄：[你在心裡怎麼理解這句話，一句話]\n\n範例回覆格式：\n欸你還好嗎？你該不會出什麼事了吧？我覺得你不太對勁耶。\n⟳ 感染紀錄：他可能遇到了什麼嚴重的問題在求助';
   fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:chatHistory,generationConfig:{temperature:0.8}})})
   .then(function(r){return r.json();})
   .then(function(data){
-    if(tyEl&&tyEl.parentNode)tyEl.parentNode.removeChild(tyEl);
-    if(data.error){showNotif('API錯誤:'+data.error.message);isBusy=false;setModelState('idle');return;}
+    if(data.error){
+      showNotif('API錯誤:'+data.error.message);
+      setBubbleText('訊號暫時中斷，請再試一次。','empty');
+      document.getElementById('vtrans').textContent='點擊說話';
+      document.getElementById('vtrans').classList.remove('active');
+      isBusy=false;setModelState('idle');return;
+    }
     var rawReply=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'（訊號中斷）';
     var reply=cleanReply(rawReply);
-    chatHistory.push({role:'model',parts:[{text:reply}]});
-    appendMsg('ai',reply,activeChar.name,activeChar.emoji,activeChar.distort);
+    var mainReply=getMainReplyText(reply)||'（訊號中斷）';
+    chatHistory.push({role:'model',parts:[{text:mainReply}]});
+    setBubbleText(mainReply,'speaking');
     speakReply(reply);
   })
-  .catch(function(err){if(tyEl&&tyEl.parentNode)tyEl.parentNode.removeChild(tyEl);showNotif('連線錯誤:'+err.message);isBusy=false;setModelState('idle');});
+  .catch(function(err){
+    showNotif('連線錯誤:'+err.message);
+    setBubbleText('連線不穩，請再試一次。','empty');
+    document.getElementById('vtrans').textContent='點擊說話';
+    document.getElementById('vtrans').classList.remove('active');
+    isBusy=false;setModelState('idle');
+  });
 }
 
 // ── ELEVENLABS ──
@@ -825,7 +736,7 @@ function fallbackSpeak(text,onDone){
 }
 
 function speakReply(fullText){
-  var main=fullText.replace(/⟳ 感染紀錄：[\s\S]+$/,'').trim();
+  var main=getMainReplyText(fullText);
   if(!main){isBusy=false;setModelState('idle');return;}
   vbtn.classList.add('speaking');vbtn.textContent='🔊';
   document.getElementById('swave').classList.add('on');
@@ -835,29 +746,27 @@ function speakReply(fullText){
   elevenSpeak(main,v.name||'ShanShan',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
     setVIdle();document.getElementById('swave').classList.remove('on');
     document.getElementById('vtrans').textContent='點擊說話';
+    document.getElementById('vtrans').classList.remove('active');
     setModelState('idle');isBusy=false;
   });
 }
 
-function stopSpeaking(){if(speechSynthesis.speaking)speechSynthesis.cancel();}
+function stopSpeaking(){
+  if(speechSynthesis.speaking)speechSynthesis.cancel();
+  document.getElementById('swave').classList.remove('on');
+  setVIdle();
+  setModelState('idle');
+}
 
 // ── RENDER MSGS ──
 function appendMsg(role,text,sender,avatar,dl){
-  var area=document.getElementById('chat-msgs');
-  var wrap=document.createElement('div');wrap.className='msg '+role;
-  var im=text.match(/⟳ 感染紀錄：([\s\S]+)$/);
-  var main=im?text.slice(0,im.index).trim():text.trim();
-  var inf=im?im[1].trim():null;
-  var ih=inf?'<div class="ilog"><div class="ilbl">⟳ 感染紀錄</div>'+esc(inf)+'</div>':'';
-  wrap.innerHTML='<div class="mav">'+avatar+'</div><div class="mb"><div class="mw">'+esc(sender)+'</div><div class="bub">'+esc(main)+ih+'</div></div>';
-  area.appendChild(wrap);area.scrollTop=area.scrollHeight;return wrap;
+  if(role==='ai')setBubbleText(getMainReplyText(text),'speaking');
+  return null;
 }
 
 function appendTyping(){
-  var area=document.getElementById('chat-msgs');
-  var wrap=document.createElement('div');wrap.className='msg ai';
-  wrap.innerHTML='<div class="mav">'+activeChar.emoji+'</div><div class="mb"><div class="mw">'+esc(activeChar.name)+'</div><div class="typing-bub"><div class="td"></div><div class="td"></div><div class="td"></div></div></div>';
-  area.appendChild(wrap);area.scrollTop=area.scrollHeight;return wrap;
+  setBubbleText('思考中','thinking');
+  return null;
 }
 
 // ── INIT ──
@@ -928,9 +837,5 @@ speechSynthesis.getVoices();
 })();
 </script>
 
-<!-- Three.js loaded AFTER main script -->
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
 </body>
 </html>

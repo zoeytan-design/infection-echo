@@ -305,6 +305,9 @@ var db=null,geminiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,chatHistory=[],isBusy=false,presenceRef=null;
 var recognition=null,isRec=false,finalTx='',liveTx='',charsData={};
 var voiceCache={};
+var voiceList=[];
+var voiceListLoaded=false;
+var voiceListPromise=null;
 
 // Three.js
 var THREE_READY=false;
@@ -404,7 +407,7 @@ function startFb(){
     if(snap.val()){
       var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
       document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
-      db.ref('chars').on('value',function(s){charsData=s.val()||{};renderRoleList(charsData);});
+      db.ref('chars').on('value',function(s){charsData=s.val()||{};renderRoleList(charsData);preloadPublishedVoices(charsData);});
       showScreen('screen-select');
     }
   });
@@ -453,6 +456,7 @@ function enterRole(idx,charData){
   document.getElementById('chat-msgs').innerHTML='';
   recognition=null;
   showScreen('screen-chat');
+  preloadCharacterVoice(charData);
   setTimeout(function(){initThreeIfNeeded();loadModel(charData.colorKey||'anxiety');},100);
   if(db){
     if(presenceRef)presenceRef.remove();
@@ -734,21 +738,65 @@ function previewVoice(i){
   elevenSpeak('你好，我是'+name+'，這是語音測試。',vname,rate,stab,sim,null);
 }
 
+async function loadElevenVoices(){
+  if(!elevenKey)return null;
+  if(voiceListLoaded)return voiceCache;
+  if(voiceListPromise)return voiceListPromise;
+
+  voiceListPromise=fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}})
+    .then(function(resp){return resp.json();})
+    .then(function(data){
+      if(!data.voices)throw new Error(data.detail?JSON.stringify(data.detail):JSON.stringify(data));
+      voiceList=data.voices;
+      voiceList.forEach(function(v){voiceCache[v.name]=v.voice_id;});
+      voiceListLoaded=true;
+      voiceListPromise=null;
+      return voiceCache;
+    })
+    .catch(function(e){
+      console.warn('Voice preload failed:',e.message||e);
+      voiceListPromise=null;
+      return null;
+    });
+
+  return voiceListPromise;
+}
+
 async function getVoiceId(name){
+  if(!name)return null;
   if(voiceCache[name])return voiceCache[name];
-  try{
-    var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
-    var data=await resp.json();
-    if(data.voices){
-      data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
-      // partial match fallback
-      if(!voiceCache[name]){
-        var m=data.voices.find(function(v){return v.name.toLowerCase().indexOf(name.split(' ')[0].toLowerCase())>=0;});
-        if(m)voiceCache[name]=m.voice_id;
-      }
-    }
-    return voiceCache[name]||null;
-  }catch(e){return null;}
+
+  await loadElevenVoices();
+
+  if(!voiceCache[name]&&voiceList.length){
+    var key=String(name).split(' ')[0].toLowerCase();
+    var m=voiceList.find(function(v){return v.name.toLowerCase().indexOf(key)>=0;});
+    if(m)voiceCache[name]=m.voice_id;
+  }
+
+  return voiceCache[name]||null;
+}
+
+function preloadCharacterVoice(charData){
+  if(!elevenKey||!charData||!charData.voice||!charData.voice.name)return;
+  getVoiceId(charData.voice.name).then(function(vid){
+    if(vid){console.log('Voice preloaded:',charData.voice.name,vid);}
+  });
+}
+
+function preloadPublishedVoices(data){
+  if(!elevenKey||!data)return;
+  var names=[];
+  Object.keys(data).forEach(function(k){
+    var c=data[k];
+    if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);
+  });
+  if(!names.length)return;
+
+  loadElevenVoices().then(function(){
+    names.forEach(function(name){getVoiceId(name);});
+    console.log('Published voices preloaded:',names.join(', '));
+  });
 }
 
 async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
@@ -822,7 +870,9 @@ async function testElevenLabs(){
     var data=await resp.json();
     if(!data.voices){showNotif('API錯誤：'+JSON.stringify(data));return;}
     // Cache voices
+    voiceList=data.voices;
     data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
+    voiceListLoaded=true;
     // Find first zh voice
     var zhVoice=data.voices.find(function(v){return v.labels&&v.labels.language==='zh';});
     var testVoice=zhVoice||data.voices[0];
@@ -853,7 +903,9 @@ async function fetchVoiceList(){
     var data=await resp.json();
     if(data.voices){
       // Cache all
+      voiceList=data.voices;
       data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
+      voiceListLoaded=true;
       var html=data.voices.map(function(v){
         return '<b style="color:#c4a0f0;">'+v.name+'</b> — '+v.voice_id+(v.labels&&v.labels.language?' ('+v.labels.language+')':'');
       }).join('<br>');

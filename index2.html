@@ -278,8 +278,7 @@ var PALETTES={anxiety:{key:0xc080ff,fill:0x4040ff,rim:0xffffff,glow:0x8844ff},an
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
-// GitHub / GitHub Pages friendly background mapping
-// node0 = 攻擊者圖, node1 = 煽動者圖, node2 = 密謀者圖
+// 背景圖檔名（放在 assets/ 資料夾內）
 var CHAT_BG_FILES=['bg-C.png','bg-B.png','bg-A.png'];
 
 // ── STATE ──
@@ -290,8 +289,6 @@ var voiceCache={};
 var voiceList=[];
 var voiceListLoaded=false;
 var voiceListPromise=null;
-
-// Chat visual state
 var modelState='idle';
 
 // ── UTILS ──
@@ -304,23 +301,18 @@ var notifRemoveTimer=null;
 function showNotif(msg){
   var old=document.querySelector('.notif');
   if(old&&old.parentNode){old.parentNode.removeChild(old);}
-
   if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
   if(notifRemoveTimer){clearTimeout(notifRemoveTimer);notifRemoveTimer=null;}
-
   var n=document.createElement('div');
   n.className='notif';
   n.textContent=msg;
   document.body.appendChild(n);
-
   notifTimer=setTimeout(function(){
     n.classList.add('hide');
-
     notifRemoveTimer=setTimeout(function(){
       if(n&&n.parentNode){n.parentNode.removeChild(n);}
       notifRemoveTimer=null;
     },300);
-
     notifTimer=null;
   },3000);
 }
@@ -446,100 +438,11 @@ function enterRole(idx,charData){
   }
 }
 
-// ── CHAT VISUAL UI ──
+// ── CHAT BACKGROUND ──
 function uniqueList(arr){
   var out=[];
-  arr.forEach(function(v){
-    if(v&&out.indexOf(v)===-1)out.push(v);
-  });
+  arr.forEach(function(v){if(v&&out.indexOf(v)===-1)out.push(v);});
   return out;
-}
-
-function stripQueryHash(url){
-  return String(url||'').split('#')[0].split('?')[0];
-}
-
-function getPageDir(url){
-  var clean=stripQueryHash(url);
-  if(/\/$/.test(clean))return clean;
-  var last=clean.split('/').pop()||'';
-  // 如果最後一段像檔名，取所在資料夾；如果像 repo 名稱，補上斜線
-  if(last.indexOf('.')>=0)return clean.replace(/\/[^\/]*$/,'/');
-  return clean+'/';
-}
-
-function parseGithubBlobUrl(url){
-  var m=String(url||'').match(/github\.com\/([^\/]+)\/([^\/]+)\/blob\/([^\/]+)\/(.*)$/);
-  if(!m)return null;
-  return {user:m[1],repo:m[2],branch:m[3],path:m[4]||''};
-}
-
-function addGithubRawCandidates(candidates,info,fileName){
-  if(!info)return;
-  var dir=(info.path||'').replace(/[^\/]*$/,'');
-  // assets 在 HTML 同層
-  candidates.push('https://raw.githubusercontent.com/'+info.user+'/'+info.repo+'/'+info.branch+'/'+dir+'assets/'+fileName);
-  candidates.push('https://cdn.jsdelivr.net/gh/'+info.user+'/'+info.repo+'@'+info.branch+'/'+dir+'assets/'+fileName);
-  // assets 在 repo 根目錄
-  candidates.push('https://raw.githubusercontent.com/'+info.user+'/'+info.repo+'/'+info.branch+'/assets/'+fileName);
-  candidates.push('https://cdn.jsdelivr.net/gh/'+info.user+'/'+info.repo+'@'+info.branch+'/assets/'+fileName);
-}
-
-function getGitHubAssetCandidates(fileName){
-  var href=window.location.href;
-  var origin=window.location.origin||'';
-  var path=window.location.pathname||'/';
-  var pageDir=getPageDir(href);
-  var candidates=[];
-
-  function add(u){ if(u)candidates.push(u); }
-
-  // 1) 最先用相對路徑，最適合 GitHub Pages / 本機 / 一般網站
-  add('assets/'+fileName);
-  add('./assets/'+fileName);
-  add(pageDir+'assets/'+fileName);
-
-  // 2) GitHub Pages project site：username.github.io/repo-name/...
-  var parts=path.split('/').filter(Boolean);
-  if(origin&&parts.length>0){
-    add(origin+'/'+parts[0]+'/assets/'+fileName);
-  }
-
-  // 3) GitHub Pages user site 或自訂網域根目錄
-  if(origin){
-    add(origin+'/assets/'+fileName);
-  }
-
-  // 4) 如果 HTML 是從 github.com/.../blob/... 開啟
-  addGithubRawCandidates(candidates,parseGithubBlobUrl(href),fileName);
-
-  // 5) 如果是 htmlpreview.github.io 或其他 preview 工具，GitHub 原網址通常在 query/hash 裡
-  var decoded=decodeURIComponent((window.location.search||'')+' '+(window.location.hash||''));
-  var qMatch=decoded.match(/https?:\/\/github\.com\/[^\s#?]+\/[^\s#?]+\/blob\/[^\s#?]+\/[^\s#?]+/);
-  if(qMatch){
-    addGithubRawCandidates(candidates,parseGithubBlobUrl(qMatch[0]),fileName);
-  }
-
-  // 6) 如果 HTML 是從 raw.githubusercontent.com 開啟
-  var raw=href.match(/raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+)\/(.*)$/);
-  if(raw){
-    var rawInfo={user:raw[1],repo:raw[2],branch:raw[3],path:raw[4]||''};
-    addGithubRawCandidates(candidates,rawInfo,fileName);
-  }
-
-  // 7) 如果 HTML 是從 cdn.jsdelivr.net/gh/user/repo@branch/... 開啟
-  var jsd=href.match(/cdn\.jsdelivr\.net\/gh\/([^\/]+)\/([^@\/]+)@([^\/]+)\/(.*)$/);
-  if(jsd){
-    var dir=(jsd[4]||'').replace(/[^\/]*$/,'');
-    add('https://cdn.jsdelivr.net/gh/'+jsd[1]+'/'+jsd[2]+'@'+jsd[3]+'/'+dir+'assets/'+fileName);
-    add('https://cdn.jsdelivr.net/gh/'+jsd[1]+'/'+jsd[2]+'@'+jsd[3]+'/assets/'+fileName);
-  }
-
-  // 8) 最後嘗試與 HTML 同層
-  add(fileName);
-  add('./'+fileName);
-
-  return uniqueList(candidates);
 }
 
 function setChatBackground(idx){
@@ -552,38 +455,43 @@ function setChatBackground(idx){
   bgImg.style.display='none';
 
   var fileName=CHAT_BG_FILES[idx]||CHAT_BG_FILES[0];
-  var candidates=getGitHubAssetCandidates(fileName);
+
+  // 直接用相對路徑，適合 GitHub Pages 同目錄結構
+  var candidates=uniqueList([
+    'assets/'+fileName,
+    './assets/'+fileName,
+    '../assets/'+fileName,
+    fileName
+  ]);
+
   console.log('準備載入背景圖：',fileName,candidates);
 
   var tryIndex=0;
   function tryNext(){
     if(tryIndex>=candidates.length){
       console.warn('背景圖載入失敗，已嘗試路徑：',candidates);
-      sceneEl.style.background='linear-gradient(180deg,#5b321f,#15110e)';
-      showNotif('背景圖載入失敗：請確認 assets/'+fileName+' 已經和 HTML 一起上傳到 GitHub');
+      sceneEl.style.background='linear-gradient(180deg,#3a1a2a,#0a0808)';
+      showNotif('背景圖載入失敗：請確認 assets/'+fileName+' 已上傳');
       return;
     }
-
     var bg=candidates[tryIndex++];
     var tester=new Image();
     tester.onload=function(){
       bgImg.src=bg;
       bgImg.style.display='block';
       sceneEl.classList.add('bg-ready');
-      sceneEl.dataset.bg=bg;
       console.log('背景圖載入成功：',bg);
     };
     tester.onerror=function(){
       console.warn('背景圖路徑失敗：',bg);
       tryNext();
     };
-    // 加 timestamp 避免 GitHub Pages / browser cache 還抓到舊路徑狀態
-    tester.src=bg+(bg.indexOf('?')>=0?'&':'?')+'v='+Date.now();
+    tester.src=bg+(bg.indexOf('?')>=0?'&':'?')+'_='+Date.now();
   }
-
   tryNext();
 }
 
+// ── BUBBLE TEXT ──
 function setBubbleText(text,state){
   var el=document.getElementById('ai-bubble-text');
   if(!el)return;
@@ -592,14 +500,23 @@ function setBubbleText(text,state){
   el.textContent=text||'';
 }
 
-function setModelState(s){
-  modelState=s;
+function setModelState(s){modelState=s;}
+
+// ── 取出主要回覆文字（去掉「⟳ 感染紀錄：」那行之後的內容）──
+function getMainReplyText(fullText){
+  if(!fullText)return '';
+  var lines=fullText.split('\n');
+  var main=[];
+  for(var i=0;i<lines.length;i++){
+    if(lines[i].indexOf('⟳')===0)break;
+    main.push(lines[i]);
+  }
+  return main.join('\n').trim();
 }
 
 // ── VOICE BUTTON ──
 var vbtn=document.getElementById('vbtn');
 
-// Use pointerdown/pointerup for unified mouse+touch handling
 vbtn.addEventListener('pointerdown',function(e){
   e.preventDefault();
   vbtn.setPointerCapture(e.pointerId);
@@ -609,61 +526,35 @@ vbtn.addEventListener('pointerup',function(e){
   e.preventDefault();
   stopRec();
 });
-vbtn.addEventListener('pointercancel',function(e){
-  if(isRec)stopRec();
-});
-vbtn.addEventListener('lostpointercapture',function(e){
-  if(isRec)stopRec();
-});
-vbtn.addEventListener('pointerleave',function(e){
-  if(isRec)stopRec();
-});
+vbtn.addEventListener('pointercancel',function(e){if(isRec)stopRec();});
+vbtn.addEventListener('lostpointercapture',function(e){if(isRec)stopRec();});
+vbtn.addEventListener('pointerleave',function(e){if(isRec)stopRec();});
 
 function startRec(){
   if(isBusy)return;
-
-  // 每次開始錄音都重新初始化 recognition
   recognition=initRec();
-  if(!recognition){
-    showNotif('此瀏覽器不支援語音輸入');
-    return;
-  }
-
+  if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
   stopSpeaking();
-  isRec=true;
-  finalTx='';
-  liveTx='';
-
-  vbtn.classList.add('rec');
-  vbtn.textContent='🔴';
+  isRec=true;finalTx='';liveTx='';
+  vbtn.classList.add('rec');vbtn.textContent='🔴';
   document.getElementById('vhint').textContent='放開發送';
   document.getElementById('vtrans').textContent='聆聽中...';
   document.getElementById('vtrans').classList.add('active');
   document.getElementById('vr1').classList.add('rec');
   document.getElementById('vr2').classList.add('rec');
-
   try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
 }
 
 function stopRec(){
   if(!isRec)return;
   isRec=false;
-
   try{if(recognition)recognition.stop();}catch(e){console.warn('recognition stop failed:',e);}
-
   setVIdle();
-
-  // 不顯示使用者語音轉文字，只用於送出給 Gemini
   var text=(liveTx||finalTx).trim();
-
   document.getElementById('vtrans').textContent=text?'已收到語音':'點擊說話';
   document.getElementById('vtrans').classList.remove('active');
-
-  if(text){
-    sendMsg(text);
-  }else{
-    showNotif('沒有偵測到語音內容，請再說一次');
-  }
+  if(text){sendMsg(text);}
+  else{showNotif('沒有偵測到語音內容，請再說一次');}
 }
 
 function setVIdle(){
@@ -676,60 +567,39 @@ function setVIdle(){
 function initRec(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR)return null;
-
   var r=new SR();
-  r.lang='zh-TW';
-  r.interimResults=true;
-  r.continuous=true;
-
+  r.lang='zh-TW';r.interimResults=true;r.continuous=true;
   r.onresult=function(e){
     var interim='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var tx=e.results[i][0].transcript;
-      if(e.results[i].isFinal){
-        finalTx+=tx;
-      }else{
-        interim+=tx;
-      }
+      if(e.results[i].isFinal){finalTx+=tx;}else{interim+=tx;}
     }
-    // 保存 final + interim 的全部內容，但不把使用者語音文字顯示在畫面上
     liveTx=(finalTx+interim).trim();
     document.getElementById('vtrans').textContent=liveTx?'正在聆聽...':'聆聽中...';
     document.getElementById('vtrans').classList.add('active');
   };
-
   r.onerror=function(e){
     if(e.error!=='aborted')console.warn('SR:',e.error);
-    if(e.error==='no-speech'&&isRec){
-      try{r.start();}catch(err){}
-    }
+    if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}
   };
-
-  r.onend=function(){
-    if(isRec){try{r.start();}catch(e){}}
-  };
-
+  r.onend=function(){if(isRec){try{r.start();}catch(e){}}};
   return r;
 }
 
 // ── GEMINI ──
 function cleanReply(raw){
-  // Strip Gemini thinking/reasoning that leaks into output
   var lines=raw.split('\n');
   var cleaned=[];
-  var skip=false;
   for(var i=0;i<lines.length;i++){
     var line=lines[i];
-    // Skip thinking headers and English meta-text
     if(/^(SCENE|INITIAL THOUGHTS|My character|How to distort|The user is|Attributes:|Step \d)/i.test(line.trim()))continue;
     if(/^\d+\.\s+\*\*/i.test(line.trim()))continue;
     if(/^(\*\*|---)/i.test(line.trim()))continue;
-    // Skip lines that are clearly internal reasoning in English
-    if(line.trim().length>0 && /^[A-Za-z\*\"\']/.test(line.trim()) && !/^⟳/.test(line.trim()))continue;
+    if(line.trim().length>0&&/^[A-Za-z\*\"\']/.test(line.trim())&&!/^⟳/.test(line.trim()))continue;
     cleaned.push(line);
   }
   var result=cleaned.join('\n').trim();
-  // If everything got stripped, return original
   return result||raw.trim();
 }
 
@@ -784,38 +654,31 @@ async function loadElevenVoices(){
   if(!elevenKey)return null;
   if(voiceListLoaded)return voiceCache;
   if(voiceListPromise)return voiceListPromise;
-
   voiceListPromise=fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}})
     .then(function(resp){return resp.json();})
     .then(function(data){
       if(!data.voices)throw new Error(data.detail?JSON.stringify(data.detail):JSON.stringify(data));
       voiceList=data.voices;
       voiceList.forEach(function(v){voiceCache[v.name]=v.voice_id;});
-      voiceListLoaded=true;
-      voiceListPromise=null;
+      voiceListLoaded=true;voiceListPromise=null;
       return voiceCache;
     })
     .catch(function(e){
       console.warn('Voice preload failed:',e.message||e);
-      voiceListPromise=null;
-      return null;
+      voiceListPromise=null;return null;
     });
-
   return voiceListPromise;
 }
 
 async function getVoiceId(name){
   if(!name)return null;
   if(voiceCache[name])return voiceCache[name];
-
   await loadElevenVoices();
-
   if(!voiceCache[name]&&voiceList.length){
     var key=String(name).split(' ')[0].toLowerCase();
     var m=voiceList.find(function(v){return v.name.toLowerCase().indexOf(key)>=0;});
     if(m)voiceCache[name]=m.voice_id;
   }
-
   return voiceCache[name]||null;
 }
 
@@ -834,7 +697,6 @@ function preloadPublishedVoices(data){
     if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);
   });
   if(!names.length)return;
-
   loadElevenVoices().then(function(){
     names.forEach(function(name){getVoiceId(name);});
     console.log('Published voices preloaded:',names.join(', '));
@@ -885,40 +747,24 @@ function speakReply(fullText){
 function stopSpeaking(){
   if(speechSynthesis.speaking)speechSynthesis.cancel();
   document.getElementById('swave').classList.remove('on');
-  setVIdle();
-  setModelState('idle');
+  setVIdle();setModelState('idle');
 }
 
-// ── RENDER MSGS ──
-function appendMsg(role,text,sender,avatar,dl){
-  if(role==='ai')setBubbleText(getMainReplyText(text),'speaking');
-  return null;
-}
-
-function appendTyping(){
-  setBubbleText('思考中','thinking');
-  return null;
-}
-
-// ── INIT ──
+// ── ADMIN: 測試與查詢 ──
 async function testElevenLabs(){
   if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}
   showNotif('測試中...');
   try{
-    // First get voices
     var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
     var data=await resp.json();
     if(!data.voices){showNotif('API錯誤：'+JSON.stringify(data));return;}
-    // Cache voices
     voiceList=data.voices;
     data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
     voiceListLoaded=true;
-    // Find first zh voice
     var zhVoice=data.voices.find(function(v){return v.labels&&v.labels.language==='zh';});
     var testVoice=zhVoice||data.voices[0];
     if(!testVoice){showNotif('找不到任何聲音');return;}
     showNotif('找到聲音：'+testVoice.name+'\n正在生成語音...');
-    // Generate speech
     var resp2=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+testVoice.voice_id+'/stream',{
       method:'POST',
       headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},
@@ -942,7 +788,6 @@ async function fetchVoiceList(){
     var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});
     var data=await resp.json();
     if(data.voices){
-      // Cache all
       voiceList=data.voices;
       data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});
       voiceListLoaded=true;
@@ -957,16 +802,15 @@ async function fetchVoiceList(){
   }catch(e){document.getElementById('voice-list-content').textContent='錯誤：'+e.message;}
 }
 
+// ── INIT ──
 buildTraits();
 speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};
 speechSynthesis.getVoices();
 
-// Auto-login if keys saved
 (function(){
   var g=gk('ie_gk'),el=gk('ie_ek');
   if(g&&el){geminiKey=g;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}
 })();
 </script>
-
 </body>
 </html>

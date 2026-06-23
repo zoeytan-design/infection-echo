@@ -133,7 +133,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   <div class="key-box">
     <div class="key-logo">感染回聲</div>
     <div class="key-sub">INFECTION ECHO</div>
-    <div class="key-field"><label>GEMINI API KEY</label><input class="key-input" id="ki-gemini" type="password" placeholder="AIza..."/></div>
+    <div class="key-field"><label>OPENAI API KEY</label><input class="key-input" id="ki-openai" type="password" placeholder="sk-proj-..."/></div>
     <div class="key-field"><label>ELEVENLABS API KEY</label><input class="key-input" id="ki-eleven" type="password" placeholder="sk_..."/></div>
     <div class="key-err" id="key-err"></div>
     <button class="key-btn" onclick="submitKeys()">▶ 啟動系統</button>
@@ -276,8 +276,9 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 
 <script>
 // ── CONFIG ──
-// Gemini model — change here if needed
-var GEMINI_MODEL='gemini-2.5-flash';
+// OpenAI model — change here if needed
+// 建議先用 gpt-4.1-mini 測試，成本較低、速度較快
+var OPENAI_MODEL='gpt-4.1-mini';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
@@ -287,7 +288,7 @@ var RC=['c1','c2','c3'];
 var CHAT_BG_FILES=['bg-C.png','bg-B.png','bg-A.png'];
 
 // ── STATE ──
-var db=null,geminiKey='',elevenKey='';
+var db=null,openaiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,charsData={};
 var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
 var voiceCache={},voiceList=[],voiceListLoaded=false,voiceListPromise=null;
@@ -361,16 +362,16 @@ function toggleTrait(idx,btn){
 
 // ── KEYS ──
 function submitKeys(){
-  var g=document.getElementById('ki-gemini').value.trim();
+  var o=document.getElementById('ki-openai').value.trim();
   var el=document.getElementById('ki-eleven').value.trim();
-  if(g.length<20){document.getElementById('key-err').textContent='Gemini Key 太短，請確認';return;}
+  if(!o.startsWith('sk-')){document.getElementById('key-err').textContent='OpenAI Key 格式不正確，應該以 sk- 開頭';return;}
   if(!el.startsWith('sk_')){document.getElementById('key-err').textContent='ElevenLabs Key 格式不正確';return;}
-  geminiKey=g;elevenKey=el;sk('ie_gk',g);sk('ie_ek',el);
+  openaiKey=o;elevenKey=el;sk('ie_ok',o);sk('ie_ek',el);
   document.getElementById('key-overlay').classList.add('hidden');
   waitForFirebase();
 }
 document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
-document.getElementById('ki-gemini').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
+document.getElementById('ki-openai').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
 
 // ── FIREBASE ──
 function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
@@ -785,7 +786,7 @@ function initRec(){
 function sendMsg(text){
   if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
   if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!geminiKey){showNotif('Gemini Key 未設定');return;}
+  if(!openaiKey){showNotif('OpenAI Key 未設定');return;}
   cancelCurrentCycleAndStartNew(text);
 }
 
@@ -997,7 +998,7 @@ async function generateCurrentStep(session){
       var msg=e.message||'';
       // 404 = wrong model name, don't retry
       if(msg.indexOf('404')>=0||msg.indexOf('not found')>=0||msg.indexOf('not supported')>=0){
-        showNotif('Gemini 模型錯誤，請確認 API Key 支援的模型');
+        showNotif('OpenAI 模型錯誤，請確認 API Key 支援的模型');
         setBubbleText('AI 模型不可用','empty');
         await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'model_not_found',updatedAt:Date.now()});
         // Stop face detection from re-triggering immediately
@@ -1243,6 +1244,7 @@ function parseSpokenText(raw){
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step,userOriginalMessage){
   var role=charsData['node'+roleIdx];
   if(!role)throw new Error('缺少角色資料');
+  if(!openaiKey)throw new Error('OpenAI Key 未設定');
 
   incomingMessage=String(incomingMessage||'').trim();
   userOriginalMessage=String(userOriginalMessage||incomingMessage||'').trim();
@@ -1251,7 +1253,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
   var isFromUser=(sourceRoleIdx==='user');
 
-  var sys=
+  var instructions=
     '你是互動裝置《感染回聲》中的角色「'+role.name+'」。\n'+
     '你的核心人格：'+(role.persona||'')+'\n'+
     '你的性格標籤：'+((role.traits||[]).join('、')||'無')+'\n'+
@@ -1262,68 +1264,106 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
     '如果目前訊息來自使用者，就直接回應使用者；如果來自上一個角色，就延續上一句，但仍保留使用者原始輸入作為背景。\n'+
     '不要說你是 AI，不要說 JSON，不要說 Here is JSON，不要輸出 markdown，不要解釋格式。\n'+
     '只用繁體中文。只寫 1 句角色台詞，不超過 45 個中文字。\n'+
-    '輸出必須是合法 JSON 物件，且只能有 spokenText 欄位。';
+    '最後必須輸出符合 schema 的 JSON，且只能有 spokenText 欄位。';
 
-  var prompt=
+  var userPrompt=
     '使用者原始輸入：'+userOriginalMessage+'\n'+
     '目前這一步收到的訊息：'+incomingMessage+'\n'+
     '目前訊息是否直接來自使用者：'+(isFromUser?'是':'否')+'\n\n'+
-    '請輸出：{"spokenText":"你的角色台詞"}';
+    '請輸出 spokenText。';
 
   var body=JSON.stringify({
-    contents:[
-      {role:'user',parts:[{text:sys+'\n\n'+prompt}]}
-    ],
-    generationConfig:{
-      temperature:0.75,
-      maxOutputTokens:120,
-      responseMimeType:'application/json',
-      responseSchema:{
-        type:'OBJECT',
-        properties:{spokenText:{type:'STRING'}},
-        required:['spokenText']
+    model:OPENAI_MODEL,
+    input:[
+      {
+        role:'developer',
+        content:[{type:'input_text',text:instructions}]
+      },
+      {
+        role:'user',
+        content:[{type:'input_text',text:userPrompt}]
       }
-    }
+    ],
+    text:{
+      format:{
+        type:'json_schema',
+        name:'infection_echo_spoken_text',
+        strict:true,
+        schema:{
+          type:'object',
+          additionalProperties:false,
+          properties:{
+            spokenText:{type:'string'}
+          },
+          required:['spokenText']
+        }
+      }
+    },
+    temperature:0.75,
+    max_output_tokens:120
   });
 
-  console.log('[Gemini prompt]',{role:role.name,step:step,source:sourceName,userOriginalMessage:userOriginalMessage,incomingMessage:incomingMessage});
+  console.log('[OpenAI prompt]',{role:role.name,step:step,source:sourceName,userOriginalMessage:userOriginalMessage,incomingMessage:incomingMessage});
+
+  function extractOpenAIText(data){
+    if(!data)return '';
+    if(typeof data.output_text==='string'&&data.output_text.trim())return data.output_text.trim();
+    var out=data.output||[];
+    for(var i=0;i<out.length;i++){
+      var item=out[i];
+      var content=item&&item.content?item.content:[];
+      for(var j=0;j<content.length;j++){
+        var c=content[j];
+        if(c&&typeof c.text==='string'&&c.text.trim())return c.text.trim();
+      }
+    }
+    return '';
+  }
 
   var maxRetries=3;
   for(var attempt=1;attempt<=maxRetries;attempt++){
-    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent',{
+    var resp=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer '+openaiKey
+      },
       body:body
     });
 
+    var rawText='';
     var data=null;
-    try{data=await resp.json();}catch(e){data=null;}
+    try{
+      rawText=await resp.text();
+      data=rawText?JSON.parse(rawText):null;
+    }catch(e){
+      data=null;
+    }
 
-    if(resp.status===503||resp.status===429){
+    if(resp.status===429||resp.status===500||resp.status===502||resp.status===503||resp.status===504){
       if(attempt<maxRetries){
-        var wait=(attempt===1?3000:attempt===2?6000:12000);
-        console.log('[Gemini] '+resp.status+' attempt '+attempt+', retrying in '+wait+'ms');
+        var wait=(attempt===1?2500:attempt===2?5000:9000);
+        console.log('[OpenAI] '+resp.status+' attempt '+attempt+', retrying in '+wait+'ms');
         await new Promise(function(r){setTimeout(r,wait);});
         continue;
       }
-      throw new Error('Gemini 伺服器暫時過載，請稍後再試');
+      throw new Error('OpenAI 暫時忙碌或額度受限，請稍後再試');
     }
 
     if(!resp.ok){
-      var errMsg=(data&&data.error&&(data.error.message||JSON.stringify(data.error)))||('HTTP '+resp.status);
+      var errMsg=(data&&data.error&&(data.error.message||JSON.stringify(data.error)))||rawText||('HTTP '+resp.status);
       throw new Error(errMsg);
     }
-    if(data&&data.error)throw new Error(data.error.message||JSON.stringify(data.error));
 
-    var raw=data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
-    console.log('[Gemini raw]',raw);
+    var raw=extractOpenAIText(data);
+    console.log('[OpenAI raw]',raw);
 
     var parsed=parseSpokenText(raw);
     if(!parsed.spokenText){
       parsed.spokenText=isFromUser?'你剛剛那句話讓我很在意。':'這句話聽起來越來越不單純。';
     }
     parsed.spokenText=clampText(parsed.spokenText,120);
-    console.log('[Gemini parsed]',parsed.spokenText);
+    console.log('[OpenAI parsed]',parsed.spokenText);
     return parsed;
   }
 }
@@ -1440,7 +1480,7 @@ async function fetchVoiceList(){
 
 // ── INIT ──
 buildTraits();speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
-(function(){var g=gk('ie_gk'),el=gk('ie_ek');if(g&&el){geminiKey=g;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}})();
+(function(){var o=gk('ie_ok'),el=gk('ie_ek');if(o&&el){openaiKey=o;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}})();
 
 </script>
 </body>

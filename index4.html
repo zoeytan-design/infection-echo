@@ -984,23 +984,40 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var sys='你是「'+role.name+'」。你的個性：'+role.persona+'\n性格標籤：'+(role.traits||[]).join('、')+'\n扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n\n你正在參與一個三個 AI 角色互相傳話的系統。上一個訊息來自：'+sourceName+'。你聽到的內容就是上一個角色說出口的話，或使用者剛剛說的話。\n\n你必須根據自己的性格、偏見、情緒與扭曲強度，把這段話重新理解後，用你的角色語氣說出來。\n\n規則：\n- 只使用繁體中文\n- 像正在和另一個角色對話\n- 口語化、自然、有角色感\n- 不要解釋設定\n- 不要輸出思考過程\n- 不要輸出英文\n- 不要輸出條列\n- 不要太長，1-2句即可\n- 只輸出合法 JSON，不要 markdown\n- JSON 格式必須是：{"spokenText":"你的台詞"}';
   var user='你剛剛聽到的內容：'+incomingMessage;
 
-  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
-    body:JSON.stringify({
-      system_instruction:{parts:[{text:sys}]},
-      contents:[{role:'user',parts:[{text:user}]}],
-      generationConfig:{temperature:0.82,response_mime_type:'application/json'}
-    })
+  var body=JSON.stringify({
+    system_instruction:{parts:[{text:sys}]},
+    contents:[{role:'user',parts:[{text:user}]}],
+    generationConfig:{temperature:0.82,response_mime_type:'application/json'}
   });
 
-  var data=await resp.json();
-  if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+  // Retry up to 3 times on 503 with exponential backoff
+  var maxRetries=3;
+  for(var attempt=1;attempt<=maxRetries;attempt++){
+    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
+      body:body
+    });
 
-  var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
-  var parsed=parseSpokenText(raw);
-  if(!parsed.spokenText)parsed.spokenText='我覺得這件事沒有那麼單純。';
-  return parsed;
+    if(resp.status===503||resp.status===429){
+      if(attempt<maxRetries){
+        var wait=(attempt===1?3000:attempt===2?6000:12000);
+        console.log('[Gemini] '+resp.status+' attempt '+attempt+', retrying in '+wait+'ms');
+        await new Promise(function(r){setTimeout(r,wait);});
+        continue;
+      }else{
+        throw new Error('Gemini 伺服器暫時過載，請稍後再試');
+      }
+    }
+
+    var data=await resp.json();
+    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+
+    var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
+    var parsed=parseSpokenText(raw);
+    if(!parsed.spokenText)parsed.spokenText='我覺得這件事沒有那麼單純。';
+    return parsed;
+  }
 }
 
 // ── SPEAKING ──

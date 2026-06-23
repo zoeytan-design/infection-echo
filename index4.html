@@ -1141,30 +1141,71 @@ async function tryAdvanceFromWaiting(cycleId,finishedStep){
 
 function parseSpokenText(raw){
   var txt=String(raw||'').trim();
-  // Strip markdown code blocks
-  txt=txt.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```$/,'').trim();
 
-  // Try to find and parse JSON object
+  function cleanMeta(s){
+    return String(s||'')
+      .trim()
+      .replace(/^```json\s*/i,'')
+      .replace(/^```\s*/,'')
+      .replace(/```$/,'')
+      .replace(/^Here is the JSON:?\s*/i,'')
+      .replace(/^Here is JSON:?\s*/i,'')
+      .replace(/^The JSON is:?\s*/i,'')
+      .replace(/^以下是(?:純)?JSON(?:格式)?[:：]?\s*/i,'')
+      .replace(/^如下[:：]?\s*/i,'')
+      .trim();
+  }
+
+  function extractSpoken(value){
+    if(!value)return '';
+    if(typeof value==='object'){
+      return value.spokenText||value.visibleText||value.text||value.reply||value.content||'';
+    }
+    if(typeof value==='string'){
+      var s=cleanMeta(value);
+      if((s.startsWith('{')&&s.endsWith('}'))||(s.startsWith('"')&&s.endsWith('"'))){
+        try{return extractSpoken(JSON.parse(s));}catch(e){}
+      }
+      return s;
+    }
+    return '';
+  }
+
+  txt=cleanMeta(txt);
+
+  // 1. 直接 parse 整段
+  try{
+    var direct=JSON.parse(txt);
+    var spoken=extractSpoken(direct);
+    if(spoken)return {spokenText:clampText(spoken,120)};
+  }catch(e){}
+
+  // 2. 從中間抓 {...}
   var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
   if(first>=0&&last>first){
     try{
       var obj=JSON.parse(txt.slice(first,last+1));
-      var spoken=obj.spokenText||obj.visibleText||obj.text||obj.reply||obj.content||'';
-      if(spoken)return {spokenText:clampText(spoken,120)};
+      var spoken2=extractSpoken(obj);
+      if(spoken2)return {spokenText:clampText(spoken2,120)};
     }catch(e){}
   }
 
-  // Filter out meta phrases like "Here is the JSON", "以下是", etc.
-  var metaPhrases=['Here is the JSON','here is the json','以下是','如下','JSON格式','json:','JSON:'];
-  var isMetaOnly=metaPhrases.some(function(p){return txt.toLowerCase().indexOf(p.toLowerCase())>=0&&txt.length<60;});
-  if(isMetaOnly)return {spokenText:'我需要重新整理一下思緒。'};
-
-  // Last resort: use first sentence
-  txt=txt.replace(/⟳ 感染紀錄：/g,'\n感染紀錄：');
-  var firstLine=(txt.split('\n')[0]||txt).trim();
-  // If it looks like a JSON key/value pair, skip it
-  if(firstLine.startsWith('"')||firstLine.startsWith('{'))return {spokenText:'我需要重新整理一下思緒。'};
-  return {spokenText:clampText(firstLine,120)};
+  // 3. fallback：清掉 meta，取第一行有意義的文字
+  txt=cleanMeta(txt).replace(/```/g,'').trim();
+  var lines=txt.split('\n')
+    .map(function(l){return l.trim();})
+    .filter(function(l){
+      return l&&
+        !/^Here is/i.test(l)&&
+        !/^The JSON/i.test(l)&&
+        !/^JSON[:：]?$/i.test(l)&&
+        !/^以下是/.test(l)&&
+        !/^如下/.test(l)&&
+        !/^\{/.test(l)&&
+        !/^\}/.test(l);
+    });
+  var fallback=lines[0]||'我聽到了，但這句話好像被傳歪了一點。';
+  return {spokenText:clampText(fallback,120)};
 }
 
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step){
@@ -1174,15 +1215,36 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var sourceName=(sourceRoleIdx==='user')?'使用者':((charsData['node'+sourceRoleIdx]&&charsData['node'+sourceRoleIdx].name)||('節點 '+(Number(sourceRoleIdx)+1)));
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
 
-  var sys='你是「'+role.name+'」。個性：'+role.persona+'\n標籤：'+(role.traits||[]).join('、')+'\n扭曲：'+(role.distort||3)+'/5。\n來自：'+sourceName+'。\n\n【重要】只能輸出純 JSON，格式必須是：{"spokenText":"台詞"}\n不可以有任何其他文字、說明、markdown、換行。\n用繁體中文，1句話，符合角色個性。';
-  var user='你剛剛聽到的內容：'+incomingMessage;
+  var sys=
+'你是互動裝置《感染回聲》中的角色「'+role.name+'」。\n'+
+'你的核心人格：'+role.persona+'\n'+
+'你的性格標籤：'+(role.traits||[]).join('、')+'\n'+
+'你的扭曲強度：'+(role.distort||3)+'/5。強度越高，越會用自己的偏見、情緒或誤解重新理解訊息。\n'+
+'訊息來源：'+sourceName+'。\n\n'+
+'任務：根據剛剛聽到的內容，用你的角色個性做出直接回應。\n'+
+'回覆必須像角色正在對另一個人說話，不要像系統訊息。\n'+
+'不要解釋設定，不要說你是 AI，不要說 JSON，不要說「以下是」。\n'+
+'只使用繁體中文。\n'+
+'只回 1 句話，不超過 40 個中文字。\n'+
+'最後輸出必須符合 JSON schema，只有 spokenText 一個欄位。';
 
-  // Merge system prompt into user message (AQ. keys don't support system_instruction)
+  var user=
+'你剛剛聽到的內容：'+incomingMessage+'\n\n'+
+'請直接產生角色會說出口的一句話。';
+
   var body=JSON.stringify({
-    contents:[
-      {role:'user',parts:[{text:sys+'\n\n使用者說的話：'+user+'\n\n記住：只輸出純JSON格式 {"spokenText":"台詞"}，不要任何其他文字。'}]}
-    ],
-    generationConfig:{temperature:0.82,response_mime_type:'application/json',maxOutputTokens:80}
+    systemInstruction:{parts:[{text:sys}]},
+    contents:[{role:'user',parts:[{text:user}]}],
+    generationConfig:{
+      temperature:0.82,
+      maxOutputTokens:80,
+      responseMimeType:'application/json',
+      responseSchema:{
+        type:'OBJECT',
+        properties:{spokenText:{type:'STRING'}},
+        required:['spokenText']
+      }
+    }
   });
 
   // Retry up to 3 times on 503 with exponential backoff
@@ -1209,7 +1271,9 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
     if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
 
     var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
+    console.log('[Gemini raw]',raw);
     var parsed=parseSpokenText(raw);
+    console.log('[Gemini parsed]',parsed);
     if(!parsed.spokenText)parsed.spokenText='我覺得這件事沒有那麼單純。';
     return parsed;
   }

@@ -600,15 +600,37 @@ function initFaceDetection(){
     return videoEl.play();
   }).then(function(){
     faceDetectionRunning=true;
-    console.log('[FaceDetection] started');
+    console.log('[FaceDetection] started, video size:',videoEl.videoWidth,'x',videoEl.videoHeight);
     document.getElementById('vtrans').textContent='等待偵測臉部...';
+
+    // 用 async tick 確保每幀都等 MediaPipe 處理完再繼續
+    var sending=false;
     function tick(){
-      if(faceDetector&&faceDetectionRunning){
-        faceDetector.send({image:videoEl}).catch(function(){});
-      }
-      requestAnimationFrame(tick);
+      if(!faceDetectionRunning)return;
+      requestAnimationFrame(function(){
+        if(faceDetector&&!sending&&videoEl.readyState>=2&&videoEl.videoWidth>0){
+          sending=true;
+          faceDetector.send({image:videoEl}).then(function(){
+            sending=false;
+          }).catch(function(e){
+            sending=false;
+            console.warn('[FaceDetection] send error:',e);
+          });
+        }
+        tick();
+      });
     }
-    tick();
+    // 等 video 真的有畫面再開始送
+    function waitForVideo(){
+      if(videoEl.videoWidth>0&&videoEl.readyState>=2){
+        console.log('[FaceDetection] video ready, starting tick');
+        tick();
+      }else{
+        console.log('[FaceDetection] waiting for video...',videoEl.readyState,videoEl.videoWidth);
+        setTimeout(waitForVideo,200);
+      }
+    }
+    waitForVideo();
   }).catch(function(e){
     console.warn('[FaceDetection] failed:',e.message);
     document.getElementById('vtrans').textContent='鏡頭無法啟動：請重新整理或檢查權限';

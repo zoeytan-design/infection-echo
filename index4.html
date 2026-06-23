@@ -277,7 +277,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <script>
 // ── CONFIG ──
 // Gemini model — change here if needed
-var GEMINI_MODEL='gemini-2.5-flash-lite';
+var GEMINI_MODEL='gemini-2.0-flash-exp';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
@@ -535,27 +535,70 @@ function initFaceDetection(){
 function onFaceResults(results){
   // Only respond when in chat and role selected, and NOT already recording or speaking
   if(!activeChar||localRoleIdx===null)return;
-  if(isRec)return; // already listening
-  if(isSubmitting)return; // waiting for AI
-  if(modelState==='speaking')return; // AI is talking
+  if(isRec)return;
+  if(isSubmitting)return;
+  if(modelState==='speaking')return;
 
   var facePresent=results.detections&&results.detections.length>0;
 
   if(facePresent){
     var det=results.detections[0];
-    var box=det.boundingBox||( det.locationData&&det.locationData.relativeBoundingBox )||null;
-    var centered=true;
-    if(box){
-      var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
-      centered=(cx>0.2&&cx<0.8);
+
+    // ── 瞳孔（雙眼）偵測邏輯 ──
+    // MediaPipe Face Detection keypoints 順序：
+    // 0=右眼, 1=左眼, 2=鼻尖, 3=嘴巴, 4=右耳, 5=左耳
+    var kps=null;
+    if(det.keypoints&&det.keypoints.length>=2){
+      kps=det.keypoints;
+    }else if(det.locationData&&det.locationData.relativeKeypoints&&det.locationData.relativeKeypoints.length>=2){
+      kps=det.locationData.relativeKeypoints;
     }
-    if(!centered){faceDetectedStart=null;return;}
+
+    var bothEyesVisible=false;
+    var eyeSpanOk=false;
+
+    if(kps&&kps.length>=2){
+      var re=kps[0]; // 右眼
+      var le=kps[1]; // 左眼
+      var rex=re.x!==undefined?re.x:(re.x||0);
+      var ley=le.x!==undefined?le.x:(le.x||0);
+
+      // 兩眼都要在畫面內（0.1~0.9 範圍）
+      var reInFrame=(re.x>0.05&&re.x<0.95&&re.y>0.05&&re.y<0.95);
+      var leInFrame=(le.x>0.05&&le.x<0.95&&le.y>0.05&&le.y<0.95);
+      bothEyesVisible=(reInFrame&&leInFrame);
+
+      // 兩眼間距要夠寬（側臉時間距會很小）
+      // 正面時兩眼間距約 0.08~0.35（相對畫面寬度）
+      var eyeDist=Math.abs(le.x-re.x);
+      eyeSpanOk=(eyeDist>0.06);
+
+      // 兩眼高度差不能太大（側臉時一高一低）
+      var eyeHeightDiff=Math.abs(le.y-re.y);
+      var eyeLevelOk=(eyeHeightDiff<0.08);
+
+      bothEyesVisible=bothEyesVisible&&eyeSpanOk&&eyeLevelOk;
+    }else{
+      // keypoints 不可用，fallback 到置中判斷
+      var box=det.boundingBox||(det.locationData&&det.locationData.relativeBoundingBox)||null;
+      if(box){
+        var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
+        bothEyesVisible=(cx>0.2&&cx<0.8);
+      }else{
+        bothEyesVisible=true;
+      }
+    }
+
+    if(!bothEyesVisible){
+      faceDetectedStart=null;
+      return;
+    }
 
     if(!faceDetectedStart)faceDetectedStart=Date.now();
     var held=Date.now()-faceDetectedStart;
 
     if(held>=FACE_HOLD_MS&&!isRec){
-      faceDetectedStart=null; // reset so it doesn't re-trigger immediately
+      faceDetectedStart=null;
       startRecAuto();
     }
   }else{
@@ -768,7 +811,7 @@ function acquireStepLock(cycleId,step,roleIdx){
   var ref=db.ref('infectionLocks/'+cycleId+'/step_'+step);
   return ref.transaction(function(cur){
     var now=Date.now();
-    if(cur&&cur.lockedAt&&now-cur.lockedAt<60000){return;}
+    if(cur&&cur.lockedAt&&now-cur.lockedAt<15000){return;}
     return {roleIdx:roleIdx,deviceId:localDeviceId,lockedAt:now};
   }).then(function(res){return !!res.committed;}).catch(function(e){console.warn('lock failed',e);return false;});
 }
@@ -779,7 +822,18 @@ async function generateCurrentStep(session){
   localGeneratingKeys[key]=true;
 
   var locked=await acquireStepLock(session.cycleId,session.step,localRoleIdx);
-  if(!locked)return;
+  if(!locked){
+    // Lock taken — wait 4s and retry once (handles slow devices)
+    await new Promise(function(r){setTimeout(r,4000);});
+    if(activeCycleId!==session.cycleId)return;
+    var snap=await db.ref('infectionSession').once('value');
+    var cur=snap.val();
+    if(cur&&cur.cycleId===session.cycleId&&cur.status==='thinking'&&Number(cur.step)===Number(session.step)){
+      localGeneratingKeys[key]=false;
+      generateCurrentStep(session);
+    }
+    return;
+  }
 
   try{
     if(activeCycleId!==session.cycleId)return;
@@ -1003,13 +1057,13 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var sourceName=(sourceRoleIdx==='user')?'使用者':((charsData['node'+sourceRoleIdx]&&charsData['node'+sourceRoleIdx].name)||('節點 '+(Number(sourceRoleIdx)+1)));
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
 
-  var sys='你是「'+role.name+'」。你的個性：'+role.persona+'\n性格標籤：'+(role.traits||[]).join('、')+'\n扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n\n你正在參與一個三個 AI 角色互相傳話的系統。上一個訊息來自：'+sourceName+'。你聽到的內容就是上一個角色說出口的話，或使用者剛剛說的話。\n\n你必須根據自己的性格、偏見、情緒與扭曲強度，把這段話重新理解後，用你的角色語氣說出來。\n\n規則：\n- 只使用繁體中文\n- 像正在和另一個角色對話\n- 口語化、自然、有角色感\n- 不要解釋設定\n- 不要輸出思考過程\n- 不要輸出英文\n- 不要輸出條列\n- 不要太長，1-2句即可\n- 只輸出合法 JSON，不要 markdown\n- JSON 格式必須是：{"spokenText":"你的台詞"}';
+  var sys='你是「'+role.name+'」。個性：'+role.persona+'\n標籤：'+(role.traits||[]).join('、')+'\n扭曲：'+(role.distort||3)+'/5。\n來自：'+sourceName+'。\n用你的角色語氣回應，繁體中文，1句話，只輸出JSON：{"spokenText":"台詞"}';
   var user='你剛剛聽到的內容：'+incomingMessage;
 
   var body=JSON.stringify({
     system_instruction:{parts:[{text:sys}]},
     contents:[{role:'user',parts:[{text:user}]}],
-    generationConfig:{temperature:0.82,response_mime_type:'application/json'}
+    generationConfig:{temperature:0.82,response_mime_type:'application/json',maxOutputTokens:80}
   });
 
   // Retry up to 3 times on 503 with exponential backoff

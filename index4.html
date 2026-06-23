@@ -582,7 +582,7 @@ function triggerInterrupt(){
 
 var faceDetectionRunning=false;
 function initFaceDetection(){
-  if(faceDetectionRunning)return; // already running
+  if(faceDetectionRunning)return;
   var videoEl=document.getElementById('face-video');
   if(!videoEl)return;
   if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
@@ -593,39 +593,25 @@ function initFaceDetection(){
   faceDetector.setOptions({model:'short',minDetectionConfidence:0.55});
   faceDetector.onResults(onFaceResults);
 
-  if(typeof Camera!=='undefined'){
-    var cam=new Camera(videoEl,{
-      onFrame:async function(){if(faceDetector)await faceDetector.send({image:videoEl});},
-      width:320,height:240
-    });
-    cam.start().then(function(){
-      faceDetectionRunning=true;
-      console.log('[FaceDetection] camera started');
-    }).catch(function(e){
-      console.warn('Camera failed:',e.message);
-      document.getElementById('vtrans').textContent='鏡頭無法啟動';
-      tryGetUserMedia(videoEl);
-    });
-  }else{
-    tryGetUserMedia(videoEl);
-  }
-}
-
-function tryGetUserMedia(videoEl){
+  // 直接用 getUserMedia，不用 Camera API，避免鏡頭衝突
   navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
   .then(function(stream){
     videoEl.srcObject=stream;
-    videoEl.play();
+    return videoEl.play();
+  }).then(function(){
     faceDetectionRunning=true;
-    console.log('[FaceDetection] getUserMedia started');
+    console.log('[FaceDetection] started');
+    document.getElementById('vtrans').textContent='等待偵測臉部...';
     function tick(){
-      if(faceDetector)faceDetector.send({image:videoEl}).catch(function(){});
+      if(faceDetector&&faceDetectionRunning){
+        faceDetector.send({image:videoEl}).catch(function(){});
+      }
       requestAnimationFrame(tick);
     }
     tick();
   }).catch(function(e){
-    console.warn('[FaceDetection] getUserMedia failed:',e.message);
-    document.getElementById('vtrans').textContent='鏡頭無法啟動：'+e.message;
+    console.warn('[FaceDetection] failed:',e.message);
+    document.getElementById('vtrans').textContent='鏡頭無法啟動：請重新整理或檢查權限';
   });
 }
 

@@ -876,7 +876,7 @@ function cancelCurrentCycleAndStartNew(userText,turnId){
   db.ref('infectionPrepared/'+cycleId).remove();
   db.ref('infectionLocks/'+cycleId).remove();
   db.ref('infectionSession').set({
-    cycleId:cycleId,status:'thinking',step:1,maxSteps:999,
+    cycleId:cycleId,status:'thinking',step:1,maxSteps:10,
     currentSpeaker:localRoleIdx,currentTarget:localRoleIdx,sourceSpeaker:'user',
     startedBy:localRoleIdx,incomingMessage:userText,spokenText:'',
     updatedAt:Date.now(),createdAt:Date.now(),createdBy:localDeviceId,
@@ -952,25 +952,13 @@ function handleSessionUpdate(session){
     return;
   }
 
-  // ── ENDED ── auto-restart with last spoken text
+  // ── ENDED ──
   if(session.status==='ended'){
     stopSpeakingAudio();
-    var lastText=session.spokenText||session.incomingMessage||'';
-    if(lastText&&session.endedReason!=='api_key_invalid'&&activeCycleId===session.cycleId){
-      // Only the original startedBy device restarts the cycle
-      if(localRoleIdx===session.startedBy||localRoleIdx===session.currentSpeaker){
-        console.log('[ended] auto-restarting cycle with:',lastText.slice(0,30));
-        setTimeout(function(){
-          if(activeCycleId===session.cycleId){
-            cancelCurrentCycleAndStartNew(lastText,currentTurnId);
-          }
-        },1200);
-      }
-    }else{
-      setBubbleText('對話循環結束','empty');
-      setSystemState('IDLE','AI 結束回應');
-      faceDetectedStart=null;
-    }
+    setBubbleText(session.spokenText||'對話循環結束','empty');
+    setVtrans('循環結束，請再說話',false);
+    setSystemState('IDLE','循環結束');
+    faceDetectedStart=null;
     return;
   }
 }
@@ -1003,7 +991,22 @@ async function generateCurrentStep(session){
   var key=session.cycleId+'_step_'+session.step+'_current';
   if(localGeneratingKeys[key])return;localGeneratingKeys[key]=true;
   var locked=await acquireStepLock(session.cycleId,session.step,localRoleIdx);
-  if(!locked)return;
+  if(!locked){
+    // Lock taken by another device — wait and check if they finished
+    console.log('[generateCurrentStep] lock taken, waiting for other device...');
+    setTimeout(async function(){
+      if(activeCycleId!==session.cycleId)return;
+      var snap=await db.ref('infectionSession').once('value');
+      var cur=snap.val();
+      // If still stuck in thinking for this step, retry
+      if(cur&&cur.cycleId===session.cycleId&&cur.status==='thinking'&&Number(cur.step)===Number(session.step)){
+        console.log('[generateCurrentStep] still stuck, forcing retry');
+        localGeneratingKeys[key]=false;
+        generateCurrentStep(session);
+      }
+    },8000);
+    return;
+  }
   try{
     if(activeCycleId!==session.cycleId)return;
     var role=charsData['node'+session.currentSpeaker];
@@ -1119,7 +1122,10 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
   var sys='你是「'+role.name+'」。你的個性：'+role.persona+'\n性格標籤：'+(role.traits||[]).join('、')+'\n扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n\n你正在參與一個三個 AI 角色互相傳話的系統。上一個訊息來自：'+sourceName+'。你聽到的內容就是上一個角色說出口的話，或使用者剛剛說的話。\n\n你必須根據自己的性格、偏見、情緒與扭曲強度，把這段話重新理解後，用你的角色語氣說出來。\n\n規則：\n- 只使用繁體中文\n- 像正在和另一個角色對話\n- 口語化、自然、有角色感\n- 不要解釋設定\n- 不要輸出思考過程\n- 不要輸出英文\n- 不要輸出條列\n- 不要太長，1-2句即可\n- 只輸出合法 JSON，不要 markdown\n- JSON 格式必須是：{"spokenText":"你的台詞"}';
   var user='你剛剛聽到的內容：'+incomingMessage;
-  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.82,response_mime_type:'application/json'}})});
+  var controller=new AbortController();
+  var fetchTimeout=setTimeout(function(){controller.abort();},25000);
+  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.82,response_mime_type:'application/json'}}),signal:controller.signal});
+  clearTimeout(fetchTimeout);
   var data=await resp.json();
   if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
   var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';

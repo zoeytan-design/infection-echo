@@ -452,6 +452,7 @@ function enterRole(idx,charData){
   document.getElementById('vtrans').textContent='等待偵測臉部...';document.getElementById('vtrans').classList.remove('active');
   document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');preloadCharacterVoice(charData);
   setTimeout(initFaceDetection,300);
+  setTimeout(initInterruptDetection,800);
   if(db){
     if(presenceRef)presenceRef.remove();
     var sid=localDeviceId+'_'+Math.random().toString(36).slice(2,6);
@@ -499,10 +500,89 @@ var vbtn=document.getElementById('vbtn');
 var faceDetectedStart=null;
 var faceListenTimer=null;
 var faceDetector=null;
-var FACE_HOLD_MS=1500; // face must be present 1.5s before listening starts
+var FACE_HOLD_MS=1500;       // face must be present 1.5s before listening starts
 var LISTEN_DURATION_MS=8000; // auto-listen for 8 seconds then submit
 
+// ── 打斷設定（可調整）──
+var INTERRUPT_RMS_THRESHOLD=0.08; // 音量門檻，0.08 = 正常說話音量
+var INTERRUPT_HOLD_MS=700;        // 持續說話多久才觸發打斷（毫秒）
+var INTERRUPT_COOLDOWN_MS=1000;   // 打斷後冷卻時間，防止連續觸發
+
+// 打斷狀態
+var interruptAudioCtx=null;
+var interruptAnalyser=null;
+var interruptMicStream=null;
+var interruptRaf=null;
+var voiceStartTime=null;
+var lastInterruptTime=0;
+
+// ── 打斷功能（麥克風音量偵測）──
+function initInterruptDetection(){
+  if(interruptAudioCtx)return; // already init
+  navigator.mediaDevices.getUserMedia({audio:true,video:false})
+  .then(function(stream){
+    interruptMicStream=stream;
+    interruptAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    interruptAnalyser=interruptAudioCtx.createAnalyser();
+    interruptAnalyser.fftSize=512;
+    var src=interruptAudioCtx.createMediaStreamSource(stream);
+    src.connect(interruptAnalyser);
+    console.log('[Interrupt] mic ready, threshold='+INTERRUPT_RMS_THRESHOLD);
+    startInterruptLoop();
+  }).catch(function(e){
+    console.warn('[Interrupt] mic access failed:',e.message);
+  });
+}
+
+function startInterruptLoop(){
+  if(interruptRaf)cancelAnimationFrame(interruptRaf);
+  var buf=new Float32Array(interruptAnalyser.fftSize);
+  function loop(){
+    interruptRaf=requestAnimationFrame(loop);
+    // 只在 AI 說話時偵測
+    if(modelState!=='speaking'){voiceStartTime=null;return;}
+    // 冷卻中不偵測
+    if(Date.now()-lastInterruptTime<INTERRUPT_COOLDOWN_MS){return;}
+
+    interruptAnalyser.getFloatTimeDomainData(buf);
+    var rms=0;
+    for(var i=0;i<buf.length;i++)rms+=buf[i]*buf[i];
+    rms=Math.sqrt(rms/buf.length);
+
+    if(rms>INTERRUPT_RMS_THRESHOLD){
+      if(!voiceStartTime)voiceStartTime=Date.now();
+      if(Date.now()-voiceStartTime>=INTERRUPT_HOLD_MS){
+        triggerInterrupt();
+        voiceStartTime=null;
+      }
+    }else{
+      voiceStartTime=null;
+    }
+  }
+  loop();
+}
+
+function triggerInterrupt(){
+  lastInterruptTime=Date.now();
+  console.log('[Interrupt] triggered! stopping AI...');
+  stopSpeaking();
+  isSubmitting=false;
+  faceDetectedStart=null;
+  setBubbleText('已打斷，重新聆聽中...','empty');
+  document.getElementById('vtrans').textContent='打斷 — 重新說話';
+  document.getElementById('vtrans').classList.add('active');
+  // 短暫延遲後重新開始錄音，讓使用者有時間開口
+  setTimeout(function(){
+    if(!isRec&&activeChar){
+      finalTx='';liveTx='';
+      startRecAuto();
+    }
+  },600);
+}
+
+var faceDetectionRunning=false;
 function initFaceDetection(){
+  if(faceDetectionRunning)return; // already running
   var videoEl=document.getElementById('face-video');
   if(!videoEl)return;
   if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
@@ -518,18 +598,35 @@ function initFaceDetection(){
       onFrame:async function(){if(faceDetector)await faceDetector.send({image:videoEl});},
       width:320,height:240
     });
-    cam.start().catch(function(e){
+    cam.start().then(function(){
+      faceDetectionRunning=true;
+      console.log('[FaceDetection] camera started');
+    }).catch(function(e){
       console.warn('Camera failed:',e.message);
-      document.getElementById('vtrans').textContent='鏡頭無法啟動，請點擊說話';
+      document.getElementById('vtrans').textContent='鏡頭無法啟動';
+      tryGetUserMedia(videoEl);
     });
   }else{
-    navigator.mediaDevices.getUserMedia({video:{width:320,height:240},audio:false})
-    .then(function(stream){
-      videoEl.srcObject=stream;videoEl.play();
-      function tick(){if(faceDetector)faceDetector.send({image:videoEl}).catch(function(){});requestAnimationFrame(tick);}
-      tick();
-    }).catch(function(e){console.warn('getUserMedia failed:',e.message);});
+    tryGetUserMedia(videoEl);
   }
+}
+
+function tryGetUserMedia(videoEl){
+  navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
+  .then(function(stream){
+    videoEl.srcObject=stream;
+    videoEl.play();
+    faceDetectionRunning=true;
+    console.log('[FaceDetection] getUserMedia started');
+    function tick(){
+      if(faceDetector)faceDetector.send({image:videoEl}).catch(function(){});
+      requestAnimationFrame(tick);
+    }
+    tick();
+  }).catch(function(e){
+    console.warn('[FaceDetection] getUserMedia failed:',e.message);
+    document.getElementById('vtrans').textContent='鏡頭無法啟動：'+e.message;
+  });
 }
 
 function onFaceResults(results){

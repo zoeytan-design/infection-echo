@@ -302,9 +302,7 @@ var CHAT_BG_FILES=['bg-C.png','bg-B.png','bg-A.png'];
 
 // Face detection timing
 var FACE_LOOK_HOLD_MS   = 1600;  // ms face must remain valid before auto-listen
-var INTERRUPT_HOLD_MS   = 700;   // ms user voice must persist to interrupt TALKING
-var INTERRUPT_COOL_MS   = 1200;  // ms INTERRUPT state lasts before returning to LISTEN
-var AUDIO_THRESHOLD     = 0.015; // RMS amplitude threshold for interrupt detection
+
 
 // ══════════════════════════════════════════════════════════
 // STATE
@@ -339,12 +337,7 @@ var faceDetector=null;
 var faceCamera=null;
 
 // Audio interrupt
-var audioContext=null;
-var analyserNode=null;
-var micSourceNode=null;
-var micStream=null;
-var interruptCheckRaf=null;
-var voiceDetectedStart=null;
+
 
 // ══════════════════════════════════════════════════════════
 // UTILS
@@ -618,59 +611,8 @@ function onFaceResults(results){
   }
 }
 
-// ══════════════════════════════════════════════════════════
-// WEB AUDIO INTERRUPT DETECTION (during TALKING)
-// ══════════════════════════════════════════════════════════
-function initAudioInterruptDetection(stream){
-  if(audioContext){try{audioContext.close();}catch(e){}}
-  audioContext=new (window.AudioContext||window.webkitAudioContext)();
-  analyserNode=audioContext.createAnalyser();
-  analyserNode.fftSize=512;
-  micSourceNode=audioContext.createMediaStreamSource(stream);
-  micSourceNode.connect(analyserNode);
-  micStream=stream;
-  startInterruptLoop();
-}
-
-function startInterruptLoop(){
-  if(interruptCheckRaf)cancelAnimationFrame(interruptCheckRaf);
-  var buf=new Float32Array(analyserNode.fftSize);
-  function loop(){
-    interruptCheckRaf=requestAnimationFrame(loop);
-    if(systemState!=='TALKING')return;
-    analyserNode.getFloatTimeDomainData(buf);
-    var rms=0;for(var i=0;i<buf.length;i++)rms+=buf[i]*buf[i];
-    rms=Math.sqrt(rms/buf.length);
-    if(rms>AUDIO_THRESHOLD){
-      if(!voiceDetectedStart)voiceDetectedStart=Date.now();
-      if(Date.now()-voiceDetectedStart>=INTERRUPT_HOLD_MS){
-        triggerInterrupt();
-        voiceDetectedStart=null;
-      }
-    }else{
-      voiceDetectedStart=null;
-    }
-  }
-  loop();
-}
-
-function triggerInterrupt(){
-  console.log('[triggerInterrupt]');
-  interruptCurrentCycle('user spoke during TALKING');
-  setSystemState('INTERRUPT','打斷！');
-  setTimeout(function(){
-    setSystemState('IDLE','準備好了');
-    faceDetectedStart=null;
-    // Face detection loop will re-detect and start listening naturally
-  },INTERRUPT_COOL_MS);
-}
-
-function ensureAudioContext(){
-  if(audioContext&&audioContext.state!=='closed')return;
-  navigator.mediaDevices.getUserMedia({audio:true,video:false}).then(function(stream){
-    initAudioInterruptDetection(stream);
-  }).catch(function(e){console.warn('Mic access for interrupt detection failed:',e);});
-}
+// Interrupt detection disabled
+function ensureAudioContext(){ /* no-op */ }
 
 function enableClickFallback(){
   // Called when camera fails — orb click starts/stops listening
@@ -934,7 +876,7 @@ function cancelCurrentCycleAndStartNew(userText,turnId){
   db.ref('infectionPrepared/'+cycleId).remove();
   db.ref('infectionLocks/'+cycleId).remove();
   db.ref('infectionSession').set({
-    cycleId:cycleId,status:'thinking',step:1,maxSteps:10,
+    cycleId:cycleId,status:'thinking',step:1,maxSteps:999,
     currentSpeaker:localRoleIdx,currentTarget:localRoleIdx,sourceSpeaker:'user',
     startedBy:localRoleIdx,incomingMessage:userText,spokenText:'',
     updatedAt:Date.now(),createdAt:Date.now(),createdBy:localDeviceId,
@@ -1010,17 +952,25 @@ function handleSessionUpdate(session){
     return;
   }
 
-  // ── ENDED ──
+  // ── ENDED ── auto-restart with last spoken text
   if(session.status==='ended'){
     stopSpeakingAudio();
-    if(isSpeaker&&session.spokenText){
-      setBubbleText(session.spokenText,'speaking');
+    var lastText=session.spokenText||session.incomingMessage||'';
+    if(lastText&&session.endedReason!=='api_key_invalid'&&activeCycleId===session.cycleId){
+      // Only the original startedBy device restarts the cycle
+      if(localRoleIdx===session.startedBy||localRoleIdx===session.currentSpeaker){
+        console.log('[ended] auto-restarting cycle with:',lastText.slice(0,30));
+        setTimeout(function(){
+          if(activeCycleId===session.cycleId){
+            cancelCurrentCycleAndStartNew(lastText,currentTurnId);
+          }
+        },1200);
+      }
     }else{
       setBubbleText('對話循環結束','empty');
+      setSystemState('IDLE','AI 結束回應');
+      faceDetectedStart=null;
     }
-    setVtrans('等待下一輪...',false);
-    setSystemState('IDLE','AI 結束回應');
-    faceDetectedStart=null;
     return;
   }
 }
@@ -1255,9 +1205,44 @@ async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
     var resp=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid+'/stream',{method:'POST',headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},body:JSON.stringify({text:text,model_id:'eleven_multilingual_v2',voice_settings:{stability:stability||0.4,similarity_boost:similarity||0.75,speed:Math.min(1.2,Math.max(0.7,rate||1.0))}})});
     if(!resp.ok){var e=await resp.json();throw new Error(JSON.stringify(e.detail||e));}
     var blob=await resp.blob();var url=URL.createObjectURL(blob);currentAudioUrl=url;currentAudio=new Audio(url);
-    currentAudio.onended=function(){URL.revokeObjectURL(url);currentAudio=null;currentAudioUrl=null;if(onDone)onDone();};
-    currentAudio.onerror=function(){URL.revokeObjectURL(url);currentAudio=null;currentAudioUrl=null;fallbackSpeak(text,onDone);};
-    currentAudio.play().catch(function(err){console.warn('Audio play failed:',err);fallbackSpeak(text,onDone);});
+
+    var done=false;
+    function finish(){
+      if(done)return;done=true;
+      try{URL.revokeObjectURL(url);}catch(e){}
+      currentAudio=null;currentAudioUrl=null;
+      if(onDone)onDone();
+    }
+
+    currentAudio.onended=finish;
+    currentAudio.onerror=function(){
+      console.warn('Audio error, falling back');
+      try{URL.revokeObjectURL(url);}catch(e){}
+      currentAudio=null;currentAudioUrl=null;
+      fallbackSpeak(text,onDone);
+    };
+
+    // iOS Safari: audio.play() returns a promise, must handle it
+    var playPromise=currentAudio.play();
+    if(playPromise!==undefined){
+      playPromise.catch(function(err){
+        console.warn('Audio play failed:',err);
+        // iOS often blocks autoplay — use fallback
+        try{URL.revokeObjectURL(url);}catch(e){}
+        currentAudio=null;currentAudioUrl=null;
+        fallbackSpeak(text,onDone);
+      });
+    }
+
+    // Safety timeout: if onended never fires (iOS bug), advance after estimated duration
+    var estimatedMs=Math.max(3000,text.length*120);
+    setTimeout(function(){
+      if(!done){
+        console.warn('[elevenSpeak] onended timeout, forcing advance');
+        finish();
+      }
+    },estimatedMs);
+
   }catch(err){console.warn('ElevenLabs error:',err.message);fallbackSpeak(text,onDone);}
 }
 function fallbackSpeak(text,onDone){var u=new SpeechSynthesisUtterance(text);u.lang='zh-TW';u.onend=onDone;u.onerror=onDone;speechSynthesis.speak(u);}

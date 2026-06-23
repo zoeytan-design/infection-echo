@@ -684,8 +684,15 @@ function onSpeechActivity(){
   silenceTimer=setTimeout(function(){
     if(isRec&&systemState==='LISTENING'){
       var text=(liveTx||finalTx).trim();
-      if(text){
+      // Require at least 4 real characters and finalTx must exist
+      // (filters out noise like "銀銀銀" which is always interim-only)
+      var cleanText=text.replace(/[^一-鿿㐀-䶿＀-￯a-zA-Z0-9\s]/g,'').trim();
+      if(finalTx.trim().length>=2&&cleanText.length>=2){
         stopListeningAndSubmit('silence-timeout');
+      }else{
+        // Likely noise — discard and keep listening
+        finalTx='';liveTx='';
+        console.log('[silence-timeout] discarded noise:',text);
       }
     }
   },SILENCE_TIMEOUT_MS);
@@ -1020,6 +1027,16 @@ async function generateCurrentStep(session){
     await db.ref('infectionSession').update({status:'speaking',currentSpeaker:session.currentSpeaker,currentTarget:nextTarget,sourceSpeaker:session.sourceSpeaker,spokenText:result.spokenText,incomingMessage:session.incomingMessage||'',speakingStartedAt:Date.now(),updatedAt:Date.now()});
   }catch(e){
     console.warn('generateCurrentStep error:',e);
+    // Check if it's an API key error — show clear message and stop cycle
+    var isKeyError=e.message&&(e.message.indexOf('API Key not found')>=0||e.message.indexOf('API_KEY_INVALID')>=0||e.message.indexOf('400')>=0);
+    if(isKeyError){
+      showNotif('Gemini API Key 無效\n請返回重新輸入正確的 Key');
+      setSystemState('IDLE','Gemini Key 錯誤');
+      sk('ie_gk','');geminiKey='';
+      setTimeout(function(){document.getElementById('key-overlay').classList.remove('hidden');},1500);
+      await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'api_key_invalid',updatedAt:Date.now()});
+      return;
+    }
     if(activeCycleId===session.cycleId){
       await db.ref('infectionSession').update({status:'ended',spokenText:'訊號暫時中斷，請再試一次。',endedReason:e.message,updatedAt:Date.now()});
     }

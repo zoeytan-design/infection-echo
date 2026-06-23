@@ -301,6 +301,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     speaking:'assets/Girl_Idle.glb'
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
+  // The GLB is authored facing away from the camera in this layout, so rotate it 180° to face forward.
+  var MODEL_BASE_ROTATION_Y=Math.PI;
 
   function getContainer(){return document.getElementById('three-layer');}
   function ensureScene(){
@@ -413,7 +415,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     Object.keys(mixers).forEach(function(k){mixers[k].update(dt);});
     if(visibleModel){
       var t=performance.now()*0.001;
-      visibleModel.rotation.y=Math.sin(t*0.35)*0.04;
+      visibleModel.rotation.y=MODEL_BASE_ROTATION_Y+Math.sin(t*0.35)*0.04;
       visibleModel.position.y=-0.15+Math.sin(t*1.1)*0.025;
     }
     renderer.render(scene,camera);
@@ -771,7 +773,9 @@ function triggerInterrupt(){
   isSubmitting=false;
   faceDetectedStart=null;
   setBubbleText('已打斷，重新聆聽中...','empty');
-  set3DState('listening');
+  // Do not switch to Girl_Listening_L during the interrupt transition.
+  // The listening model should appear only when startRecAuto()/startRec() actually begins recording.
+  set3DState('idle');
   document.getElementById('vtrans').textContent='打斷 — 重新說話';
   document.getElementById('vtrans').classList.add('active');
   // 短暫延遲後重新開始錄音，讓使用者有時間開口
@@ -968,6 +972,7 @@ function startRec(){
   document.getElementById('vhint').textContent='放開發送';
   document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
   document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
+  set3DState('listening');
   try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
 }
 function stopRec(skipSend){

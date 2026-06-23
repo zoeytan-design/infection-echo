@@ -993,7 +993,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   // Retry up to 3 times on 503 with exponential backoff
   var maxRetries=3;
   for(var attempt=1;attempt<=maxRetries;attempt++){
-    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',{
+    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
       body:body

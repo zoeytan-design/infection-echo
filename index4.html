@@ -451,6 +451,7 @@ function enterRole(idx,charData){
   setChatBackground(idx);setBubbleText('請面對鏡頭，系統將自動開始','empty');
   document.getElementById('vtrans').textContent='等待偵測臉部...';document.getElementById('vtrans').classList.remove('active');
   document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');preloadCharacterVoice(charData);
+  faceDetectionRunning=false; // reset so camera can restart
   setTimeout(initFaceDetection,300);
   setTimeout(initInterruptDetection,800);
   if(db){
@@ -581,11 +582,18 @@ function triggerInterrupt(){
 }
 
 var faceDetectionRunning=false;
+var faceVideoStream=null;
 function initFaceDetection(){
   if(faceDetectionRunning)return;
   var videoEl=document.getElementById('face-video');
   if(!videoEl)return;
   if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
+  // Release any existing stream first
+  if(faceVideoStream){
+    faceVideoStream.getTracks().forEach(function(t){t.stop();});
+    faceVideoStream=null;
+    videoEl.srcObject=null;
+  }
 
   faceDetector=new FaceDetection({locateFile:function(f){
     return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/'+f;
@@ -596,6 +604,7 @@ function initFaceDetection(){
   // 直接用 getUserMedia，不用 Camera API，避免鏡頭衝突
   navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
   .then(function(stream){
+    faceVideoStream=stream;
     videoEl.srcObject=stream;
     return videoEl.play();
   }).then(function(){
@@ -979,9 +988,9 @@ async function generateCurrentStep(session){
       status:'speaking',
       currentSpeaker:session.currentSpeaker,
       currentTarget:nextTarget,
-      sourceSpeaker:session.sourceSpeaker,
+      sourceSpeaker:session.currentSpeaker, // 下一個角色的來源是目前說話者
       spokenText:result.spokenText,
-      incomingMessage:session.incomingMessage||'',
+      incomingMessage:result.spokenText, // 下一個角色收到的是目前角色說的話
       speakingStartedAt:Date.now(),
       updatedAt:Date.now()
     });
@@ -1232,18 +1241,13 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
 '你剛剛聽到的內容：'+incomingMessage+'\n\n'+
 '請直接產生角色會說出口的一句話。';
 
+  // AQ. format keys don't support systemInstruction — merge into user message
   var body=JSON.stringify({
-    systemInstruction:{parts:[{text:sys}]},
-    contents:[{role:'user',parts:[{text:user}]}],
+    contents:[{role:'user',parts:[{text:sys+'\n\n'+user}]}],
     generationConfig:{
       temperature:0.82,
-      maxOutputTokens:80,
-      responseMimeType:'application/json',
-      responseSchema:{
-        type:'OBJECT',
-        properties:{spokenText:{type:'STRING'}},
-        required:['spokenText']
-      }
+      maxOutputTokens:200,
+      responseMimeType:'application/json'
     }
   });
 

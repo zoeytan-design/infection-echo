@@ -446,9 +446,14 @@ function stopListeningAndSubmit(triggerSource){
   if(text){
     submitUserTranscript(text);
   }else{
-    // No speech detected — go back to LOOKING wait
+    // No speech detected — cooldown before face detection can re-trigger
     setSystemState('IDLE','沒有偵測到語音');
     faceDetectedStart=null;
+    // Block face detection re-trigger for 2s to prevent instant loop
+    var blockedUntil=Date.now()+2000;
+    var _origOnFace=onFaceResults;
+    onFaceResults=function(){};
+    setTimeout(function(){onFaceResults=_origOnFace;faceDetectedStart=null;},2000);
   }
 }
 
@@ -456,7 +461,14 @@ function stopListeningAndSubmit(triggerSource){
 function submitUserTranscript(transcript){
   if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
   if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!geminiKey){showNotif('Gemini Key 未設定');return;}
+  if(!geminiKey||!geminiKey.startsWith('AIza')){
+    showNotif('Gemini Key 無效，請重新輸入');
+    setSystemState('IDLE');
+    // Clear stored bad key and show key overlay
+    sk('ie_gk','');geminiKey='';
+    document.getElementById('key-overlay').classList.remove('hidden');
+    return;
+  }
 
   currentTurnId++;
   var turnId=currentTurnId;
@@ -559,12 +571,15 @@ function initFaceDetection(){
 function onFaceResults(results){
   // Only act when in chat screen and role selected
   if(!activeChar||localRoleIdx===null)return;
-  if(systemState==='THINKING'||systemState==='TALKING'||systemState==='INTERRUPT')return;
+
+  // Face detection ONLY controls IDLE → LOOKING → LISTENING transition.
+  // It must NEVER interrupt or reset LISTENING / THINKING / TALKING / INTERRUPT.
+  if(systemState==='LISTENING'||systemState==='THINKING'||systemState==='TALKING'||systemState==='INTERRUPT')return;
 
   var facePresent=results.detections&&results.detections.length>0;
 
   if(facePresent){
-    // Check face is roughly centered (bounding box center x in 0.25–0.75 range)
+    // Check face is roughly centered
     var det=results.detections[0];
     var box=det.boundingBox||det.locationData&&det.locationData.relativeBoundingBox;
     var centered=true;
@@ -583,23 +598,22 @@ function onFaceResults(results){
       setSystemState('LOOKING','偵測到臉部...');
       faceDetectedStart=Date.now();
     }else if(systemState==='LOOKING'){
-      var elapsed=Date.now()-( faceDetectedStart||Date.now() );
+      var elapsed=Date.now()-(faceDetectedStart||Date.now());
       if(elapsed>=FACE_LOOK_HOLD_MS){
-        // Face held long enough → start listening
+        // Face held long enough → arm voice input (only from IDLE/LOOKING)
         startAutoListening('face');
       }
-    }else if(systemState==='LISTENING'){
-      // Already listening — speech-end is handled by silence detection below
     }
+    // LISTENING / THINKING / TALKING / INTERRUPT: already guarded above, never reached
   }else{
-    // No face
+    // No face detected
     if(systemState==='LOOKING'){
+      // Face left before hold completed → back to IDLE
       setSystemState('IDLE','等待偵測臉部...');
       faceDetectedStart=null;
-    }else if(systemState==='LISTENING'){
-      // Face left during listening → submit what we have
-      stopListeningAndSubmit('face-left');
     }
+    // IDLE: nothing to do
+    // LISTENING / THINKING / TALKING / INTERRUPT: guarded above, never reached
   }
 }
 

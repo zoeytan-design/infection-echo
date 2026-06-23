@@ -94,6 +94,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .chat-scene{position:absolute;inset:0;background:#111;overflow:hidden;}
 .chat-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;}
 .chat-scene.bg-ready .chat-bg-img{display:block;}
+.three-layer{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;display:none;overflow:hidden;}
+.three-layer canvas{display:block;width:100%;height:100%;}
 .chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;z-index:2;}
 .ai-bubble-text{position:absolute;left:9.2%;top:18.3%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:#2b2724;font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:none;scrollbar-width:thin;}
 .ai-bubble-text.empty{color:rgba(43,39,36,0.38);font-weight:500;}
@@ -259,6 +261,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   <div class="chat-phone">
     <div class="chat-scene" id="chat-scene">
       <img class="chat-bg-img" id="chat-bg-img" alt=""/>
+      <div class="three-layer" id="three-layer" aria-hidden="true"></div>
       <button class="chat-back-float" onclick="goBack()">← 返回</button>
       <div class="ai-bubble-text empty" id="ai-bubble-text">點擊下方按鈕開始對話</div>
       <div class="vzone">
@@ -273,6 +276,181 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     </div>
   </div>
 </div>
+
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+(function(){
+  var container=null,renderer=null,scene=null,camera=null,loader=null,clock=null,rafId=null;
+  var initialized=false,roleIndex=null,currentState='idle';
+  var models={},mixers={},visibleModel=null;
+  var MODEL_PATHS={
+    idle:'assets/Girl_Idle.glb',
+    listening:'assets/Girl_Listening_L.glb',
+    thinking:'assets/Girl_Thinking.glb',
+    speaking:'assets/Girl_Idle.glb'
+  };
+  var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
+
+  function getContainer(){return document.getElementById('three-layer');}
+  function ensureScene(){
+    container=getContainer();
+    if(!container)return false;
+    if(initialized)return true;
+
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(32,1,0.1,100);
+    camera.position.set(0,0.35,4.2);
+
+    renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    renderer.setClearColor(0x000000,0);
+    container.innerHTML='';
+    container.appendChild(renderer.domElement);
+
+    var hemi=new THREE.HemisphereLight(0xffffff,0x221133,1.7);
+    scene.add(hemi);
+    var key=new THREE.DirectionalLight(0xffffff,2.1);
+    key.position.set(1.5,2.6,3.0);
+    scene.add(key);
+    var rim=new THREE.DirectionalLight(0x9b6dff,1.0);
+    rim.position.set(-2,1,2);
+    scene.add(rim);
+
+    loader=new GLTFLoader();
+    clock=new THREE.Clock();
+    initialized=true;
+    resize();
+    window.addEventListener('resize',resize);
+    loadAllModels();
+    animate();
+    return true;
+  }
+
+  function resize(){
+    if(!renderer||!camera||!container)return;
+    var w=container.clientWidth||window.innerWidth;
+    var h=container.clientHeight||window.innerHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h;
+    camera.updateProjectionMatrix();
+  }
+
+  function normalizeModel(root){
+    var box=new THREE.Box3().setFromObject(root);
+    var size=new THREE.Vector3();
+    var center=new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    root.position.sub(center);
+    var maxDim=Math.max(size.x,size.y,size.z)||1;
+    var scale=2.35/maxDim;
+    root.scale.setScalar(scale);
+    root.position.y-=0.15;
+    root.traverse(function(obj){
+      if(obj.isMesh){
+        obj.frustumCulled=false;
+        if(obj.material){
+          obj.material.needsUpdate=true;
+        }
+      }
+    });
+  }
+
+  function loadModel(key,path){
+    if(models[key])return;
+    loader.load(path,function(gltf){
+      var root=gltf.scene;
+      root.name='IE3D_'+key;
+      normalizeModel(root);
+      root.visible=false;
+      scene.add(root);
+      models[key]=root;
+      if(gltf.animations&&gltf.animations.length){
+        var mixer=new THREE.AnimationMixer(root);
+        gltf.animations.forEach(function(clip){
+          var action=mixer.clipAction(clip);
+          action.setLoop(THREE.LoopRepeat,Infinity);
+          action.play();
+        });
+        mixers[key]=mixer;
+      }
+      applyState(currentState);
+      console.log('[IE3D] loaded',key,path);
+    },undefined,function(err){
+      console.warn('[IE3D] GLB load failed:',path,err&&err.message?err.message:err);
+    });
+  }
+
+  function loadAllModels(){
+    loadModel('idle',MODEL_PATHS.idle);
+    loadModel('listening',MODEL_PATHS.listening);
+    loadModel('thinking',MODEL_PATHS.thinking);
+  }
+
+  function applyState(state){
+    currentState=state||'idle';
+    if(roleIndex!==0){return;}
+    var modelKey=STATE_TO_MODEL[currentState]||'idle';
+    Object.keys(models).forEach(function(k){models[k].visible=(k===modelKey);});
+    visibleModel=models[modelKey]||null;
+  }
+
+  function animate(){
+    rafId=requestAnimationFrame(animate);
+    if(!renderer||!scene||!camera||!clock)return;
+    var dt=clock.getDelta();
+    Object.keys(mixers).forEach(function(k){mixers[k].update(dt);});
+    if(visibleModel){
+      var t=performance.now()*0.001;
+      visibleModel.rotation.y=Math.sin(t*0.35)*0.04;
+      visibleModel.position.y=-0.15+Math.sin(t*1.1)*0.025;
+    }
+    renderer.render(scene,camera);
+  }
+
+  function init(idx){
+    roleIndex=idx;
+    container=getContainer();
+    if(!container)return;
+    if(idx!==0){
+      container.style.display='none';
+      return;
+    }
+    container.style.display='block';
+    ensureScene();
+    resize();
+    applyState('idle');
+  }
+
+  function setState(state){
+    if(roleIndex!==0)return;
+    if(!ensureScene())return;
+    container.style.display='block';
+    applyState(state||'idle');
+  }
+
+  function destroy(){
+    roleIndex=null;
+    currentState='idle';
+    container=getContainer();
+    if(container)container.style.display='none';
+    if(models){Object.keys(models).forEach(function(k){models[k].visible=false;});}
+  }
+
+  window.IE3D={init:init,setState:setState,destroy:destroy};
+})();
+</script>
 
 <script>
 console.log('[Infection Echo] OpenAI build loaded: no Gemini endpoint');
@@ -336,7 +514,7 @@ function showNotif(msg){
 // ── SCREENS ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});}
 function goBack(){
-  stopSpeaking();if(isRec)stopRec(true);
+  stopSpeaking();destroy3DLayer();if(isRec)stopRec(true);
   if(presenceRef){presenceRef.remove();presenceRef=null;}
   activeChar=null;activeNodeIdx=null;localRoleIdx=null;lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
   renderRoleList(charsData);showScreen('screen-select');
@@ -452,7 +630,7 @@ function enterRole(idx,charData){
   lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
   setChatBackground(idx);setBubbleText('請面對鏡頭，系統將自動開始','empty');
   document.getElementById('vtrans').textContent='等待偵測臉部...';document.getElementById('vtrans').classList.remove('active');
-  document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');preloadCharacterVoice(charData);
+  document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');init3DForRole(idx);set3DState('idle');preloadCharacterVoice(charData);
   setTimeout(initFaceDetection,300);
   setTimeout(initInterruptDetection,800);
   if(db){
@@ -492,6 +670,19 @@ function setBubbleText(text,state){
   el.classList.remove('empty','thinking','speaking');if(state)el.classList.add(state);el.textContent=text||'';
 }
 function setModelState(s){modelState=s;}
+function init3DForRole(idx){
+  if(window.IE3D&&typeof window.IE3D.init==='function'){
+    window.IE3D.init(idx);
+  }else if(idx===0){
+    setTimeout(function(){if(window.IE3D&&typeof window.IE3D.init==='function')window.IE3D.init(idx);},500);
+  }
+}
+function set3DState(state){
+  if(window.IE3D&&typeof window.IE3D.setState==='function')window.IE3D.setState(state);
+}
+function destroy3DLayer(){
+  if(window.IE3D&&typeof window.IE3D.destroy==='function')window.IE3D.destroy();
+}
 
 // ── VOICE BUTTON ──
 var vbtn=document.getElementById('vbtn');
@@ -580,6 +771,7 @@ function triggerInterrupt(){
   isSubmitting=false;
   faceDetectedStart=null;
   setBubbleText('已打斷，重新聆聽中...','empty');
+  set3DState('listening');
   document.getElementById('vtrans').textContent='打斷 — 重新說話';
   document.getElementById('vtrans').classList.add('active');
   // 短暫延遲後重新開始錄音，讓使用者有時間開口
@@ -742,6 +934,7 @@ function startRecAuto(){
   document.getElementById('vhint').textContent='自動聆聽中';
   document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
   document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
+  set3DState('listening');
   try{recognition.start();}catch(e){console.warn('recognition start:',e);}
 
   // Auto-submit after LISTEN_DURATION_MS
@@ -762,6 +955,8 @@ function stopRecAuto(){
   if(text&&!isSubmitting){
     isSubmitting=true;
     sendMsg(text);
+  }else if(!text){
+    set3DState('idle');
   }
 }
 function startRec(){
@@ -821,6 +1016,7 @@ function cancelCurrentCycleAndStartNew(userText){
   activeCycleId=cycleId;
 
   setBubbleText('思考中','thinking');
+  set3DState('thinking');
   document.getElementById('vtrans').textContent='思考中...';
   document.getElementById('vtrans').classList.add('active');
 
@@ -860,6 +1056,7 @@ function handleSessionUpdate(session){
   if(session.status==='thinking'){
     if(localRoleIdx===session.currentSpeaker){
       setBubbleText('思考中','thinking');
+      set3DState('thinking');
       document.getElementById('vtrans').textContent='思考中...';
       document.getElementById('vtrans').classList.add('active');
       generateCurrentStep(session);
@@ -874,9 +1071,11 @@ function handleSessionUpdate(session){
   if(session.status==='speaking'){
     if(localRoleIdx===session.currentSpeaker){
       setBubbleText(session.spokenText||'（訊號中斷）','speaking');
+      set3DState('speaking');
       speakSessionText(session);
     }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
       setBubbleText('思考中','thinking');
+      set3DState('thinking');
       document.getElementById('vtrans').textContent='思考中...';
       document.getElementById('vtrans').classList.add('active');
       // 速度優化：目前角色一開始說話，下一個角色就立刻用 spokenText 思考。
@@ -892,6 +1091,7 @@ function handleSessionUpdate(session){
   if(session.status==='waiting_next'){
     if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
       setBubbleText('思考中','thinking');
+      set3DState('thinking');
       document.getElementById('vtrans').textContent='思考中...';
       document.getElementById('vtrans').classList.add('active');
       prepareNextResponse(session);
@@ -909,6 +1109,7 @@ function handleSessionUpdate(session){
     isSubmitting=false;
     faceDetectedStart=null;
     setModelState('idle');
+    set3DState('idle');
     if(session.endedReason==='model_not_found'){
       setBubbleText('AI 模型不可用，請檢查 API Key','empty');
     }else if(localRoleIdx===session.currentSpeaker&&session.spokenText){
@@ -1402,6 +1603,7 @@ function speakSessionText(session){
   document.getElementById('vtrans').textContent='AI 說話中...';
   document.getElementById('vtrans').classList.add('active');
   setModelState('speaking');
+  set3DState('speaking');
 
   var role=charsData['node'+session.currentSpeaker]||activeChar;
   var v=(role&&role.voice)||{};
@@ -1411,6 +1613,7 @@ function speakSessionText(session){
     setVIdle();
     document.getElementById('swave').classList.remove('on');
     setModelState('idle');
+    set3DState('idle');
     advanceAfterSpeaking(session);
   });
 }
@@ -1422,6 +1625,7 @@ function stopSpeaking(){
   document.getElementById('swave').classList.remove('on');
   setVIdle();
   setModelState('idle');
+  set3DState('idle');
 }
 
 // ── ELEVENLABS ──

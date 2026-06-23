@@ -7,7 +7,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<!-- MediaPipe Face Detection (browser-side, no Python required) -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
 <style>
@@ -96,32 +95,27 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .chat-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0;}
 .chat-scene.bg-ready .chat-bg-img{display:block;}
 .chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;z-index:2;}
-.ai-bubble-wrap{position:absolute;left:5%;top:14%;width:88%;height:18%;z-index:5;pointer-events:none;}
-.ai-bubble-text{width:100%;height:100%;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:#2b2724;font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:none;scrollbar-width:thin;}
+.ai-bubble-text{position:absolute;left:9.2%;top:18.3%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:#2b2724;font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:none;scrollbar-width:thin;}
 .ai-bubble-text.empty{color:rgba(43,39,36,0.38);font-weight:500;}
 .ai-bubble-text.thinking{color:rgba(43,39,36,0.62);font-weight:700;}
 .ai-bubble-text.thinking::after{content:'';width:0.4em;animation:dotText 1.1s steps(4,end) infinite;}
 @keyframes dotText{0%{content:'';}25%{content:'.';}50%{content:'..';}75%,100%{content:'...';}}
 .chat-back-float{position:absolute;top:14px;right:14px;z-index:30;background:rgba(0,0,0,0.32);border:0.5px solid rgba(255,255,255,0.28);border-radius:999px;color:rgba(255,255,255,0.88);font-family:var(--mono);font-size:11px;cursor:pointer;padding:7px 12px;backdrop-filter:blur(8px);}
 .chat-back-float:active{transform:scale(0.96);}
-/* Status zone replaces old voice button zone */
-.vzone{position:absolute;left:0;right:0;bottom:0;width:100%;padding:12px 20px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;background:linear-gradient(transparent,rgba(5,5,8,0.62) 34%,rgba(5,5,8,0.9));z-index:25;}
+.vzone{position:absolute;left:0;right:0;bottom:0;width:100%;padding:12px 20px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;border-top:none;background:linear-gradient(transparent,rgba(5,5,8,0.62) 34%,rgba(5,5,8,0.9));z-index:25;}
 .vtrans{font-family:var(--serif);font-size:13px;color:rgba(255,255,255,0.58);text-align:center;min-height:20px;line-height:1.6;max-width:380px;text-shadow:0 1px 8px rgba(0,0,0,0.55);}
 .vtrans.active{color:var(--teal);}
-/* State indicator orb (replaces voice button) */
-.state-orb-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:62px;height:62px;}
-.state-orb-ring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,0.18);pointer-events:none;animation:rp 2.5s ease-in-out infinite;}
-.state-orb-ring:nth-child(1){width:80px;height:80px;}
-.state-orb-ring:nth-child(2){width:98px;height:98px;animation-delay:0.8s;}
+.vwrap{position:relative;display:flex;align-items:center;justify-content:center;}
+.vring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,0.24);pointer-events:none;animation:rp 2.5s ease-in-out infinite;}
+.vring:nth-child(1){width:80px;height:80px;}
+.vring:nth-child(2){width:98px;height:98px;animation-delay:0.8s;}
 @keyframes rp{0%{transform:scale(1);opacity:0.5;}50%{transform:scale(1.1);opacity:0.2;}100%{transform:scale(1);opacity:0.5;}}
-.state-orb-ring.active{border-color:rgba(0,201,167,0.62);animation:rr 0.8s ease-in-out infinite alternate;}
+.vring.rec{border-color:rgba(0,201,167,0.62);animation:rr 0.8s ease-in-out infinite alternate;}
 @keyframes rr{from{transform:scale(1);opacity:0.6;}to{transform:scale(1.15);opacity:1;}}
-#state-orb{position:relative;z-index:2;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,0.10);border:1.5px solid rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;font-size:24px;backdrop-filter:blur(10px);transition:all 0.3s;}
-#state-orb.orb-looking{background:rgba(155,109,255,0.15);border-color:rgba(155,109,255,0.5);}
-#state-orb.orb-listening{background:rgba(0,201,167,0.18);border-color:rgba(0,201,167,0.65);box-shadow:0 0 20px rgba(0,201,167,0.2);}
-#state-orb.orb-thinking{background:rgba(240,165,0,0.12);border-color:rgba(240,165,0,0.45);}
-#state-orb.orb-talking{background:rgba(155,109,255,0.2);border-color:rgba(155,109,255,0.7);box-shadow:0 0 24px rgba(155,109,255,0.25);}
-#state-orb.orb-interrupt{background:rgba(255,79,109,0.2);border-color:rgba(255,79,109,0.6);}
+#vbtn{position:relative;z-index:2;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,0.14);border:1.5px solid rgba(255,255,255,0.42);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all 0.2s;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(10px);}
+#vbtn.rec{background:rgba(0,201,167,0.23);border-color:rgba(0,201,167,0.68);box-shadow:0 0 20px rgba(0,201,167,0.25);}
+#vbtn.speaking{background:rgba(240,165,0,0.18);border-color:rgba(240,165,0,0.5);}
+.vhint{font-size:10px;color:rgba(255,255,255,0.54);letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 8px rgba(0,0,0,0.55);}
 .swave{display:flex;align-items:center;gap:3px;height:16px;opacity:0;transition:opacity 0.3s;}
 .swave.on{opacity:1;}
 .wb{width:3px;border-radius:2px;background:var(--gold);animation:wb 0.8s ease-in-out infinite alternate;}
@@ -129,14 +123,11 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 @keyframes wb{from{transform:scaleY(0.4);}to{transform:scaleY(1);}}
 .notif{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(0);background:rgba(255,79,109,0.1);border:0.5px solid rgba(255,79,109,0.3);border-radius:10px;padding:9px 16px;font-size:12px;color:rgba(255,79,109,0.9);z-index:300;text-align:center;max-width:320px;white-space:pre-line;opacity:1;pointer-events:none;transition:opacity 0.25s ease,transform 0.25s ease;}
 .notif.hide{opacity:0;transform:translateX(-50%) translateY(8px);}
-/* Hidden webcam for MediaPipe */
-#face-video{position:fixed;top:-9999px;left:-9999px;width:320px;height:240px;opacity:0;pointer-events:none;}
 </style>
 </head>
 <body>
 <div class="scanline"></div>
-<!-- Hidden video feed for face detection -->
-<video id="face-video" playsinline muted></video>
+<video id="face-video" playsinline muted style="position:fixed;top:-9999px;left:-9999px;width:320px;height:240px;opacity:0;pointer-events:none;"></video>
 
 <div id="key-overlay">
   <div class="key-box">
@@ -157,7 +148,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <button class="setup-close" onclick="showScreen('screen-select')">完成 ✕</button>
   </div>
   <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="fb-status" id="fb-status">連線中...</div><button class="prev-btn" onclick="fetchVoiceList()" style="margin-top:0;white-space:nowrap;">🔍 查詢可用聲音</button>
-  <button class="prev-btn" onclick="testElevenLabs()" style="margin-top:0;white-space:nowrap;background:rgba(0,201,167,0.1);border-color:rgba(0,201,167,0.3);color:var(--teal);">🔊 測試語音連線</button></div></div>
+<button class="prev-btn" onclick="testElevenLabs()" style="margin-top:0;white-space:nowrap;background:rgba(0,201,167,0.1);border-color:rgba(0,201,167,0.3);color:var(--teal);">🔊 測試語音連線</button></div></div>
   <div id="voice-list-result" style="display:none;margin-bottom:14px;"><div class="sec-title">ElevenLabs 可用聲音</div><div class="card" style="font-size:11px;line-height:2;color:#aaa;" id="voice-list-content"></div></div>
   <div class="sec-title">角色節點設定</div>
   <div class="ctabs">
@@ -172,21 +163,19 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
     <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="3" id="c-distort-0" oninput="document.getElementById('dv-0').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-0">3</span></div>
     <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-0">
-      <option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲（推薦焦慮者）</option>
-      <option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-      <option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-      <option value="Anna Su - Trustworthy, Clear and Natural">Anna Su 2 — 清晰自然女聲</option>
-      <option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-      <option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
-      <option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲</option>
-      <option value="Andrew Lo">Andrew Lo — 男聲</option>
-      <option value="Hardy">Hardy — 男聲</option>
-      <option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-      <option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-      <option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
-      <option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option>
-    </select></div></div>
+    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-0"><option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲（推薦焦慮者）</option>
+<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
+<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
+<option value="Anna Su - Trustworthy, Clear and Natural">Anna Su 2 — 清晰自然女聲</option>
+<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
+<option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
+<option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲</option>
+<option value="Andrew Lo">Andrew Lo — 男聲</option>
+<option value="Hardy">Hardy — 男聲</option>
+<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
+<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
+<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
+<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
     <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.15" id="c-rate-0" oninput="document.getElementById('rv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-0">1.15</span></div></div></div>
     <div class="frow s"><div class="f"><label>穩定性（低=情緒起伏大）</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.35" id="c-stab-0" oninput="document.getElementById('sv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-0">0.35</span></div></div></div>
     <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-0" oninput="document.getElementById('smv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-0">0.75</span></div></div></div>
@@ -202,20 +191,18 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
     <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="4" id="c-distort-1" oninput="document.getElementById('dv-1').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-1">4</span></div>
     <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-1">
-      <option value="Andrew Lo">Andrew Lo — 男聲（推薦煽動者）</option>
-      <option value="Hardy">Hardy — 男聲</option>
-      <option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-      <option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲</option>
-      <option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
-      <option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-      <option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
-      <option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-      <option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-      <option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-      <option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
-      <option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option>
-    </select></div></div>
+    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-1"><option value="Andrew Lo">Andrew Lo — 男聲（推薦煽動者）</option>
+<option value="Hardy">Hardy — 男聲</option>
+<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
+<option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲</option>
+<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
+<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
+<option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
+<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
+<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
+<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
+<option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
+<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
     <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.1" id="c-rate-1" oninput="document.getElementById('rv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-1">1.10</span></div></div></div>
     <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.25" id="c-stab-1" oninput="document.getElementById('sv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-1">0.25</span></div></div></div>
     <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.8" id="c-sim-1" oninput="document.getElementById('smv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-1">0.80</span></div></div></div>
@@ -231,20 +218,18 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
     <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="4" id="c-distort-2" oninput="document.getElementById('dv-2').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-2">4</span></div>
     <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-2">
-      <option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲（推薦陰謀者）</option>
-      <option value="Hardy">Hardy — 男聲</option>
-      <option value="Andrew Lo">Andrew Lo — 男聲</option>
-      <option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
-      <option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-      <option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option>
-      <option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-      <option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
-      <option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-      <option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-      <option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-      <option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
-    </select></div></div>
+    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-2"><option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲（推薦陰謀者）</option>
+<option value="Hardy">Hardy — 男聲</option>
+<option value="Andrew Lo">Andrew Lo — 男聲</option>
+<option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
+<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
+<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option>
+<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
+<option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
+<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
+<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
+<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
+<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option></select></div></div>
     <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="0.85" id="c-rate-2" oninput="document.getElementById('rv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-2">0.85</span></div></div></div>
     <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.55" id="c-stab-2" oninput="document.getElementById('sv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-2">0.55</span></div></div></div>
     <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-2" oninput="document.getElementById('smv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-2">0.75</span></div></div></div>
@@ -275,14 +260,13 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="chat-scene" id="chat-scene">
       <img class="chat-bg-img" id="chat-bg-img" alt=""/>
       <button class="chat-back-float" onclick="goBack()">← 返回</button>
-      <div class="ai-bubble-text empty" id="ai-bubble-text">請將臉部對準鏡頭</div>
+      <div class="ai-bubble-text empty" id="ai-bubble-text">點擊下方按鈕開始對話</div>
       <div class="vzone">
         <div class="swave" id="swave"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
         <div class="vtrans" id="vtrans">等待偵測臉部...</div>
-        <div class="state-orb-wrap">
-          <div class="state-orb-ring" id="orb-r1"></div>
-          <div class="state-orb-ring" id="orb-r2"></div>
-          <div id="state-orb">👁</div>
+        <div class="vwrap">
+          <div class="vring" id="vr1"></div><div class="vring" id="vr2"></div>
+          <button id="vbtn">🎙</button>
         </div>
         <div class="vhint" id="vhint">自動偵測中</div>
       </div>
@@ -291,22 +275,15 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════════
-// CONFIG
-// ══════════════════════════════════════════════════════════
+// ── CONFIG ──
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
+// 背景圖檔名（放在 assets/ 資料夾內）
 var CHAT_BG_FILES=['bg-C.png','bg-B.png','bg-A.png'];
 
-// Face detection timing
-var FACE_LOOK_HOLD_MS   = 1600;  // ms face must remain valid before auto-listen
-
-
-// ══════════════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════════════
+// ── STATE ──
 var db=null,geminiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,charsData={};
 var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
@@ -324,24 +301,7 @@ var sessionListenerStarted=false;
 var presenceListenerStarted=false;
 var modelState='idle';
 
-// Turn-id guard: new user input invalidates old AI response
-var currentTurnId=0;
-
-// System states: IDLE | LOOKING | LISTENING | THINKING | TALKING | INTERRUPT
-var systemState='IDLE';
-var faceDetectionFailed=false; // true when camera unavailable, enables click fallback
-
-// Face tracking
-var faceDetectedStart=null;
-var faceDetector=null;
-var faceCamera=null;
-
-// Audio interrupt
-
-
-// ══════════════════════════════════════════════════════════
-// UTILS
-// ══════════════════════════════════════════════════════════
+// ── UTILS ──
 function gk(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function sk(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
@@ -349,337 +309,34 @@ function clampText(s,max){s=String(s||'').trim();return s.length>max?s.slice(0,m
 function randId(prefix){return (prefix||'id')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
 var notifTimer=null,notifRemoveTimer=null;
 function showNotif(msg){
-  var old=document.querySelector('.notif');if(old&&old.parentNode){old.parentNode.removeChild(old);}
-  if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}if(notifRemoveTimer){clearTimeout(notifRemoveTimer);notifRemoveTimer=null;}
-  var n=document.createElement('div');n.className='notif';n.textContent=msg;document.body.appendChild(n);
-  notifTimer=setTimeout(function(){n.classList.add('hide');notifRemoveTimer=setTimeout(function(){if(n&&n.parentNode){n.parentNode.removeChild(n);}notifRemoveTimer=null;},300);notifTimer=null;},3000);
+  var old=document.querySelector('.notif');
+  if(old&&old.parentNode){old.parentNode.removeChild(old);}
+  if(notifTimer){clearTimeout(notifTimer);notifTimer=null;}
+  if(notifRemoveTimer){clearTimeout(notifRemoveTimer);notifRemoveTimer=null;}
+  var n=document.createElement('div');
+  n.className='notif';
+  n.textContent=msg;
+  document.body.appendChild(n);
+  notifTimer=setTimeout(function(){
+    n.classList.add('hide');
+    notifRemoveTimer=setTimeout(function(){
+      if(n&&n.parentNode){n.parentNode.removeChild(n);}
+      notifRemoveTimer=null;
+    },300);
+    notifTimer=null;
+  },3000);
 }
 
-// ══════════════════════════════════════════════════════════
-// UNIFIED STATE MACHINE
-// ══════════════════════════════════════════════════════════
-function setSystemState(state,hint){
-  systemState=state;
-  var orb=document.getElementById('state-orb');
-  var r1=document.getElementById('orb-r1'),r2=document.getElementById('orb-r2');
-  var vtrans=document.getElementById('vtrans');
-  var vhint=document.getElementById('vhint');
-  if(!orb)return;
-
-  orb.className='';
-  r1.className='state-orb-ring';r2.className='state-orb-ring';
-  vtrans.classList.remove('active');
-
-  if(state==='IDLE'){
-    orb.textContent='👁';
-    vhint.textContent=faceDetectionFailed?'點擊開始說話':'自動偵測中';
-    vtrans.textContent=hint||(faceDetectionFailed?'點擊眼睛開始說話':'等待偵測臉部...');
-    setModelState('idle');
-  }else if(state==='LOOKING'){
-    orb.className='orb-looking';orb.textContent='👀';
-    vhint.textContent='偵測到臉部';vtrans.textContent=hint||'正在確認...';
-    vtrans.classList.add('active');
-    setModelState('looking');
-  }else if(state==='LISTENING'){
-    orb.className='orb-listening';orb.textContent='🎙';
-    r1.classList.add('active');r2.classList.add('active');
-    vhint.textContent='聆聽中';vtrans.textContent=hint||'請說話...';
-    vtrans.classList.add('active');
-    document.getElementById('swave').classList.remove('on');
-    setModelState('listening');
-  }else if(state==='THINKING'){
-    orb.className='orb-thinking';orb.textContent='💭';
-    vhint.textContent='思考中';vtrans.textContent=hint||'思考中...';
-    vtrans.classList.add('active');
-    document.getElementById('swave').classList.remove('on');
-    setModelState('thinking');
-  }else if(state==='TALKING'){
-    orb.className='orb-talking';orb.textContent='🔊';
-    vhint.textContent='AI 說話中';vtrans.textContent=hint||'AI 說話中...';
-    vtrans.classList.add('active');
-    document.getElementById('swave').classList.add('on');
-    setModelState('speaking');
-  }else if(state==='INTERRUPT'){
-    orb.className='orb-interrupt';orb.textContent='⚡';
-    vhint.textContent='打斷中';vtrans.textContent=hint||'打斷...';
-    document.getElementById('swave').classList.remove('on');
-    setModelState('interrupt');
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-// CORE CYCLE FUNCTIONS
-// ══════════════════════════════════════════════════════════
-
-// Stop AI audio and reset flags — called before any new user input
-function interruptCurrentCycle(reason){
-  console.log('[interruptCurrentCycle]',reason);
-  stopSpeakingAudio();
-  // Don't stop recognition here — caller decides
-}
-
-// Start speech recognition automatically (no button required)
-function startAutoListening(triggerSource){
-  if(!activeChar){return;}
-  if(isRec)return;
-  recognition=initRec();
-  if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
-  stopSpeakingAudio();
-  isRec=true;finalTx='';liveTx='';
-  setSystemState('LISTENING','聆聽中...');
-  try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
-  console.log('[startAutoListening] source:',triggerSource);
-}
-
-// Stop recognition and submit transcript if meaningful
-function stopListeningAndSubmit(triggerSource){
-  if(!isRec)return;
-  isRec=false;
-  try{if(recognition)recognition.stop();}catch(e){}
-  var text=(liveTx||finalTx).trim();
-  console.log('[stopListeningAndSubmit] source:',triggerSource,'text:',text);
-  if(text){
-    submitUserTranscript(text);
-  }else{
-    // No speech detected — cooldown before face detection can re-trigger
-    setSystemState('IDLE','沒有偵測到語音');
-    faceDetectedStart=null;
-    // Block face detection re-trigger for 2s to prevent instant loop
-    var blockedUntil=Date.now()+2000;
-    var _origOnFace=onFaceResults;
-    onFaceResults=function(){};
-    setTimeout(function(){onFaceResults=_origOnFace;faceDetectedStart=null;},2000);
-  }
-}
-
-// Submit transcript to Gemini pipeline (with turn-id guard)
-function submitUserTranscript(transcript){
-  if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
-  if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!geminiKey||geminiKey.length<20){
-    showNotif('Gemini Key 無效，請重新輸入');
-    setSystemState('IDLE');
-    sk('ie_gk','');geminiKey='';
-    document.getElementById('key-overlay').classList.remove('hidden');
-    return;
-  }
-
-  currentTurnId++;
-  var turnId=currentTurnId;
-
-  interruptCurrentCycle('new user transcript');
-  setSystemState('THINKING','思考中...');
-  setBubbleText('思考中','thinking');
-  document.getElementById('vtrans').textContent='思考中...';
-
-  // Start multi-AI Firebase cycle (existing logic preserved)
-  cancelCurrentCycleAndStartNew(transcript,turnId);
-}
-
-// Called when ElevenLabs finishes talking
-function finishTalking(turnId){
-  if(turnId!==currentTurnId)return; // stale turn
-  setSystemState('IDLE','AI 說完了');
-  document.getElementById('swave').classList.remove('on');
-  setModelState('idle');
-  // Re-enable face detection loop to allow next interaction
-  faceDetectedStart=null;
-}
-
-// ══════════════════════════════════════════════════════════
-// SPEECH RECOGNITION (reusable, no button binding)
-// ══════════════════════════════════════════════════════════
-function initRec(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return null;
-  var r=new SR();r.lang='zh-TW';r.interimResults=true;r.continuous=true;
-  r.onresult=function(e){
-    var interim='';
-    for(var i=e.resultIndex;i<e.results.length;i++){
-      var tx=e.results[i][0].transcript;
-      if(e.results[i].isFinal){finalTx+=tx;}else{interim+=tx;}
-    }
-    liveTx=(finalTx+interim).trim();
-    document.getElementById('vtrans').textContent=liveTx?'正在聆聽...':'聆聽中...';
-    document.getElementById('vtrans').classList.add('active');
-  };
-  r.onerror=function(e){
-    if(e.error!=='aborted')console.warn('SR:',e.error);
-    if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}
-  };
-  r.onend=function(){
-    // Auto-restart while in LISTENING state
-    if(isRec&&systemState==='LISTENING'){try{r.start();}catch(e){}}
-    // If system moved away from LISTENING (e.g. face left), stop cleanly
-    else if(isRec&&systemState!=='LISTENING'){isRec=false;}
-  };
-  return r;
-}
-
-// ══════════════════════════════════════════════════════════
-// MEDIAPIPE FACE DETECTION (browser-side)
-// ══════════════════════════════════════════════════════════
-function initFaceDetection(){
-  var videoEl=document.getElementById('face-video');
-  if(!videoEl){console.warn('face-video element missing');return;}
-
-  // Load MediaPipe FaceDetection
-  if(typeof FaceDetection==='undefined'){
-    console.warn('MediaPipe FaceDetection not loaded yet, retrying...');
-    setTimeout(initFaceDetection,500);
-    return;
-  }
-
-  faceDetector=new FaceDetection({locateFile:function(file){
-    return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/'+file;
-  }});
-  faceDetector.setOptions({model:'short',minDetectionConfidence:0.5});
-  faceDetector.onResults(onFaceResults);
-
-  if(typeof Camera!=='undefined'){
-    faceCamera=new Camera(videoEl,{
-      onFrame:async function(){
-        if(faceDetector)await faceDetector.send({image:videoEl});
-      },
-      width:320,height:240
-    });
-    faceCamera.start().catch(function(e){
-      console.warn('Camera start failed:',e);
-      enableClickFallback();
-    });
-  }else{
-    // Fallback: getUserMedia directly
-    navigator.mediaDevices.getUserMedia({video:{width:320,height:240},audio:false}).then(function(stream){
-      videoEl.srcObject=stream;videoEl.play();
-      function sendFrame(){
-        if(faceDetector)faceDetector.send({image:videoEl}).catch(function(){});
-        requestAnimationFrame(sendFrame);
-      }
-      sendFrame();
-    }).catch(function(e){
-      console.warn('getUserMedia failed:',e);
-      enableClickFallback();
-    });
-  }
-}
-
-function onFaceResults(results){
-  // Only act when in chat screen and role selected
-  if(!activeChar||localRoleIdx===null)return;
-
-  // Face detection ONLY controls IDLE → LOOKING → LISTENING transition.
-  // It must NEVER interrupt or reset LISTENING / THINKING / TALKING / INTERRUPT.
-  if(systemState==='LISTENING'||systemState==='THINKING'||systemState==='TALKING'||systemState==='INTERRUPT')return;
-
-  var facePresent=results.detections&&results.detections.length>0;
-
-  if(facePresent){
-    // Check face is roughly centered
-    var det=results.detections[0];
-    var box=det.boundingBox||det.locationData&&det.locationData.relativeBoundingBox;
-    var centered=true;
-    if(box){
-      var cx=box.xCenter!==undefined?box.xCenter:(box.xMin||0)+(box.width||0.5)*0.5;
-      centered=(cx>0.2&&cx<0.8);
-    }
-
-    if(!centered){
-      faceDetectedStart=null;
-      if(systemState==='LOOKING')setSystemState('IDLE','請將臉部對準鏡頭');
-      return;
-    }
-
-    if(systemState==='IDLE'){
-      setSystemState('LOOKING','偵測到臉部...');
-      faceDetectedStart=Date.now();
-    }else if(systemState==='LOOKING'){
-      var elapsed=Date.now()-(faceDetectedStart||Date.now());
-      if(elapsed>=FACE_LOOK_HOLD_MS){
-        // Face held long enough → arm voice input (only from IDLE/LOOKING)
-        startAutoListening('face');
-      }
-    }
-    // LISTENING / THINKING / TALKING / INTERRUPT: already guarded above, never reached
-  }else{
-    // No face detected
-    if(systemState==='LOOKING'){
-      // Face left before hold completed → back to IDLE
-      setSystemState('IDLE','等待偵測臉部...');
-      faceDetectedStart=null;
-    }
-    // IDLE: nothing to do
-    // LISTENING / THINKING / TALKING / INTERRUPT: guarded above, never reached
-  }
-}
-
-// Interrupt detection disabled
-function ensureAudioContext(){ /* no-op */ }
-
-function enableClickFallback(){
-  // Called when camera fails — orb click starts/stops listening
-  faceDetectionFailed=true;
-  var orb=document.getElementById('state-orb');
-  var hint=document.getElementById('vhint');
-  if(hint)hint.textContent='點擊開始說話';
-  if(orb){
-    orb.style.cursor='pointer';
-    orb.title='點擊開始說話';
-    orb.addEventListener('click',function(){
-      if(!activeChar)return;
-      if(systemState==='IDLE'||systemState==='LOOKING'){
-        startAutoListening('click');
-      }else if(systemState==='LISTENING'){
-        stopListeningAndSubmit('click');
-      }
-    });
-  }
-  showNotif('鏡頭無法啟動\n已切換為點擊模式：點擊眼睛開始說話');
-}
-
-// ══════════════════════════════════════════════════════════
-// SILENCE DETECTION (auto-submit after user stops speaking)
-// ══════════════════════════════════════════════════════════
-var silenceTimer=null;
-var SILENCE_TIMEOUT_MS=1800; // submit after 1.8s of silence during LISTENING
-
-function onSpeechActivity(){
-  // Called when liveTx updates — reset silence timer
-  if(silenceTimer)clearTimeout(silenceTimer);
-  silenceTimer=setTimeout(function(){
-    if(isRec&&systemState==='LISTENING'){
-      var text=(liveTx||finalTx).trim();
-      // Require at least 4 real characters and finalTx must exist
-      // (filters out noise like "銀銀銀" which is always interim-only)
-      var cleanText=text.replace(/[^一-鿿㐀-䶿＀-￯a-zA-Z0-9\s]/g,'').trim();
-      if(finalTx.trim().length>=2&&cleanText.length>=2){
-        stopListeningAndSubmit('silence-timeout');
-      }else{
-        // Likely noise — discard and keep listening
-        finalTx='';liveTx='';
-        console.log('[silence-timeout] discarded noise:',text);
-      }
-    }
-  },SILENCE_TIMEOUT_MS);
-}
-
-// ══════════════════════════════════════════════════════════
-// SCREENS
-// ══════════════════════════════════════════════════════════
+// ── SCREENS ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});}
 function goBack(){
-  stopSpeakingAudio();
-  if(isRec){isRec=false;try{if(recognition)recognition.stop();}catch(e){}}
+  stopSpeaking();if(isRec)stopRec(true);
   if(presenceRef){presenceRef.remove();presenceRef=null;}
-  activeChar=null;activeNodeIdx=null;localRoleIdx=null;lastSpokenKey=null;
-  localGeneratingKeys={};localPreparingKeys={};
-  setSystemState('IDLE');
-  faceDetectedStart=null;
-  renderRoleList(charsData);
-  showScreen('screen-select');
+  activeChar=null;activeNodeIdx=null;localRoleIdx=null;lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
+  renderRoleList(charsData);showScreen('screen-select');
 }
 
-// ══════════════════════════════════════════════════════════
-// SETUP
-// ══════════════════════════════════════════════════════════
+// ── SETUP ──
 function switchTab(i){
   for(var j=0;j<3;j++){
     document.querySelector('.ctab:nth-child('+(j+1)+')').classList.toggle('on',j===i);
@@ -702,7 +359,7 @@ function toggleTrait(idx,btn){
 function submitKeys(){
   var g=document.getElementById('ki-gemini').value.trim();
   var el=document.getElementById('ki-eleven').value.trim();
-  if(g.length<20){document.getElementById('key-err').textContent='Gemini Key 太短，請確認後再輸入';return;}
+  if(g.length<20){document.getElementById('key-err').textContent='Gemini Key 太短，請確認';return;}
   if(!el.startsWith('sk_')){document.getElementById('key-err').textContent='ElevenLabs Key 格式不正確';return;}
   geminiKey=g;elevenKey=el;sk('ie_gk',g);sk('ie_ek',el);
   document.getElementById('key-overlay').classList.add('hidden');
@@ -712,74 +369,40 @@ document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e
 document.getElementById('ki-gemini').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
 
 // ── FIREBASE ──
-function waitForFirebase(){
-  console.log('[Firebase] waiting for SDK...');
-  if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);
-}
+function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
 function initFb(){
-  console.log('[Firebase] initFb called, apps:',firebase.apps.length);
-  try{
-    if(firebase.apps.length){firebase.app().delete().then(startFb).catch(startFb);}
-    else{startFb();}
-  }catch(e){
-    console.error('[Firebase] initFb error:',e);
-    document.getElementById('fb-status').textContent='失敗:'+e.message;
-    document.getElementById('fb-status').className='fb-status err';
-  }
+  try{if(firebase.apps.length)firebase.app().delete().then(startFb);else startFb();}
+  catch(e){document.getElementById('fb-status').textContent='失敗:'+e.message;}
 }
 function startFb(){
-  console.log('[Firebase] startFb called');
-  try{
-    firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
-    db=firebase.database();
-    console.log('[Firebase] database created, listening to .info/connected');
-
-    // Timeout fallback: if Firebase doesn't connect in 8s, show error
-    var fbTimeout=setTimeout(function(){
-      console.warn('[Firebase] connection timeout after 8s');
-      var el=document.getElementById('fb-status');
-      if(el.className.indexOf('ok')<0){
-        el.textContent='⚠ 連線逾時 — 請確認網路或 Firebase 設定';
-        el.className='fb-status err';
-        // Still show the select screen so user can at least reach setup
-        showScreen('screen-select');
-        renderRoleList({});
-      }
-    },8000);
-
-    db.ref('.info/connected').on('value',function(snap){
-      console.log('[Firebase] .info/connected =',snap.val());
-      if(snap.val()){
-        clearTimeout(fbTimeout);
-        var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
-        document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
-        db.ref('chars').on('value',function(s){
-          charsData=s.val()||{};
-          console.log('[Firebase] chars updated:',Object.keys(charsData));
-          renderRoleList(charsData);
-          preloadPublishedVoices(charsData);
-        });
-        listenToPresence();
-        listenToInfectionSession();
-        showScreen('screen-select');
-      }
-    });
-  }catch(e){
-    console.error('[Firebase] startFb error:',e);
-    document.getElementById('fb-status').textContent='啟動失敗:'+e.message;
-    document.getElementById('fb-status').className='fb-status err';
-  }
+  firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
+  db=firebase.database();
+  db.ref('.info/connected').on('value',function(snap){
+    if(snap.val()){
+      var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
+      document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
+      db.ref('chars').on('value',function(s){charsData=s.val()||{};renderRoleList(charsData);preloadPublishedVoices(charsData);});
+      listenToPresence();
+      listenToInfectionSession();
+      showScreen('screen-select');
+    }
+  });
 }
 function listenToPresence(){
-  if(presenceListenerStarted||!db)return;presenceListenerStarted=true;
+  if(presenceListenerStarted||!db)return;
+  presenceListenerStarted=true;
   db.ref('presence').on('value',function(snap){
     var raw=snap.val()||{};var parsed={};
-    for(var i=0;i<3;i++){var node=raw['node'+i]||{};parsed[i]=Object.keys(node).length>0;}
+    for(var i=0;i<3;i++){
+      var node=raw['node'+i]||{};
+      parsed[i]=Object.keys(node).length>0;
+    }
     onlineRoles=parsed;
   });
 }
 function listenToInfectionSession(){
-  if(sessionListenerStarted||!db)return;sessionListenerStarted=true;
+  if(sessionListenerStarted||!db)return;
+  sessionListenerStarted=true;
   db.ref('infectionSession').on('value',function(snap){handleSessionUpdate(snap.val());});
 }
 
@@ -808,38 +431,29 @@ function saveChar(i){
 // ── ROLE LIST ──
 function renderRoleList(data){
   var list=document.getElementById('role-list');list.innerHTML='';
-  var hasAny=false;for(var i=0;i<3;i++){if(data['node'+i])hasAny=true;}
-  if(!hasAny){
-    list.innerHTML='<div style="text-align:center;padding:20px 0;"><div style="font-size:13px;color:#44445a;margin-bottom:12px;">尚未發布任何角色節點</div><button onclick="showScreen("screen-setup")" style="background:rgba(155,109,255,0.15);border:0.5px solid rgba(155,109,255,0.4);border-radius:8px;color:#c4a0f0;cursor:pointer;font-family:var(--mono);font-size:12px;padding:10px 20px;">⚙ 前往系統設定發布角色</button></div>';
-    return;
-  }
-  for(var j=0;j<3;j++){(function(idx){
+  for(var i=0;i<3;i++){(function(idx){
     var c=data['node'+idx];var card=document.createElement('div');
     card.className='rc'+(c?'':' unavail');
     card.innerHTML='<div class="rav '+RC[idx]+'">'+(c?esc(c.emoji):'?')+'</div><div class="rt"><div class="rn">'+esc(c?c.name:'節點'+(idx+1))+'</div><div class="rtr">'+esc(c?c.traits.join(' · '):'等待發布...')+'</div></div>'+(c?'<div class="ra">→</div>':'');
     if(c)card.onclick=function(){enterRole(idx,c);};
     list.appendChild(card);
-  })(j);}
+  })(i);}
 }
 
 // ── ENTER ROLE ──
 function enterRole(idx,charData){
   activeNodeIdx=idx;localRoleIdx=idx;activeChar=charData;recognition=null;
   lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
-  setChatBackground(idx);setBubbleText('請將臉部對準鏡頭','empty');
-  document.getElementById('swave').classList.remove('on');
-  setSystemState('IDLE','等待偵測臉部...');
-  showScreen('screen-chat');
-  preloadCharacterVoice(charData);
+  setChatBackground(idx);setBubbleText('請面對鏡頭，系統將自動開始','empty');
+  document.getElementById('vtrans').textContent='等待偵測臉部...';document.getElementById('vtrans').classList.remove('active');
+  document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');preloadCharacterVoice(charData);
+  setTimeout(initFaceDetection,300);
   if(db){
     if(presenceRef)presenceRef.remove();
     var sid=localDeviceId+'_'+Math.random().toString(36).slice(2,6);
     presenceRef=db.ref('presence/node'+idx+'/'+sid);
     presenceRef.set({deviceId:localDeviceId,joinedAt:Date.now()});presenceRef.onDisconnect().remove();
   }
-  // Start face detection and audio interrupt monitoring
-  ensureAudioContext();
-  initFaceDetection();
 }
 
 // ── CHAT BACKGROUND ──
@@ -849,12 +463,17 @@ function setChatBackground(idx){
   sceneEl.classList.remove('bg-ready');bgImg.removeAttribute('src');bgImg.style.display='none';
   var fileName=CHAT_BG_FILES[idx]||CHAT_BG_FILES[0];
   var candidates=uniqueList(['assets/'+fileName,'./assets/'+fileName,'../assets/'+fileName,fileName]);
+  console.log('準備載入背景圖：',fileName,candidates);
   var tryIndex=0;
   function tryNext(){
-    if(tryIndex>=candidates.length){sceneEl.style.background='linear-gradient(180deg,#3a1a2a,#0a0808)';showNotif('背景圖載入失敗：請確認 assets/'+fileName+' 已上傳');return;}
+    if(tryIndex>=candidates.length){
+      console.warn('背景圖載入失敗，已嘗試路徑：',candidates);
+      sceneEl.style.background='linear-gradient(180deg,#3a1a2a,#0a0808)';
+      showNotif('背景圖載入失敗：請確認 assets/'+fileName+' 已上傳');return;
+    }
     var bg=candidates[tryIndex++];var tester=new Image();
-    tester.onload=function(){bgImg.src=bg;bgImg.style.display='block';sceneEl.classList.add('bg-ready');};
-    tester.onerror=function(){tryNext();};
+    tester.onload=function(){bgImg.src=bg;bgImg.style.display='block';sceneEl.classList.add('bg-ready');console.log('背景圖載入成功：',bg);};
+    tester.onerror=function(){console.warn('背景圖路徑失敗：',bg);tryNext();};
     tester.src=bg+(bg.indexOf('?')>=0?'&':'?')+'_='+Date.now();
   }
   tryNext();
@@ -867,20 +486,184 @@ function setBubbleText(text,state){
 }
 function setModelState(s){modelState=s;}
 
-// ── MULTI-AI FIREBASE CYCLE ──
-function cancelCurrentCycleAndStartNew(userText,turnId){
-  stopSpeakingAudio();
-  localGeneratingKeys={};localPreparingKeys={};lastSpokenKey=null;
-  var cycleId=randId('cycle');activeCycleId=cycleId;
+// ── VOICE BUTTON ──
+var vbtn=document.getElementById('vbtn');
+// Button kept for visual feedback only — pointer events disabled
+// Input is now triggered by face detection automatically
+
+// ── FACE DETECTION STATE ──
+var faceDetectedStart=null;
+var faceListenTimer=null;
+var faceDetector=null;
+var FACE_HOLD_MS=1500; // face must be present 1.5s before listening starts
+var LISTEN_DURATION_MS=8000; // auto-listen for 8 seconds then submit
+
+function initFaceDetection(){
+  var videoEl=document.getElementById('face-video');
+  if(!videoEl)return;
+  if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
+
+  faceDetector=new FaceDetection({locateFile:function(f){
+    return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/'+f;
+  }});
+  faceDetector.setOptions({model:'short',minDetectionConfidence:0.55});
+  faceDetector.onResults(onFaceResults);
+
+  if(typeof Camera!=='undefined'){
+    var cam=new Camera(videoEl,{
+      onFrame:async function(){if(faceDetector)await faceDetector.send({image:videoEl});},
+      width:320,height:240
+    });
+    cam.start().catch(function(e){
+      console.warn('Camera failed:',e.message);
+      document.getElementById('vtrans').textContent='鏡頭無法啟動，請點擊說話';
+    });
+  }else{
+    navigator.mediaDevices.getUserMedia({video:{width:320,height:240},audio:false})
+    .then(function(stream){
+      videoEl.srcObject=stream;videoEl.play();
+      function tick(){if(faceDetector)faceDetector.send({image:videoEl}).catch(function(){});requestAnimationFrame(tick);}
+      tick();
+    }).catch(function(e){console.warn('getUserMedia failed:',e.message);});
+  }
+}
+
+function onFaceResults(results){
+  // Only respond when in chat and role selected, and NOT already recording or speaking
+  if(!activeChar||localRoleIdx===null)return;
+  if(isRec)return; // already listening
+  if(modelState==='speaking')return; // AI is talking
+
+  var facePresent=results.detections&&results.detections.length>0;
+
+  if(facePresent){
+    var det=results.detections[0];
+    var box=det.boundingBox||( det.locationData&&det.locationData.relativeBoundingBox )||null;
+    var centered=true;
+    if(box){
+      var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
+      centered=(cx>0.2&&cx<0.8);
+    }
+    if(!centered){faceDetectedStart=null;return;}
+
+    if(!faceDetectedStart)faceDetectedStart=Date.now();
+    var held=Date.now()-faceDetectedStart;
+
+    if(held>=FACE_HOLD_MS&&!isRec){
+      faceDetectedStart=null; // reset so it doesn't re-trigger immediately
+      startRecAuto();
+    }
+  }else{
+    faceDetectedStart=null;
+  }
+}
+
+function startRecAuto(){
+  if(isRec||!activeChar)return;
+  recognition=initRec();
+  if(!recognition){document.getElementById('vtrans').textContent='不支援語音辨識';return;}
+  stopSpeaking();isRec=true;finalTx='';liveTx='';
+  vbtn.classList.add('rec');vbtn.textContent='🔴';
+  document.getElementById('vhint').textContent='自動聆聽中';
+  document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
+  document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
+  try{recognition.start();}catch(e){console.warn('recognition start:',e);}
+
+  // Auto-submit after LISTEN_DURATION_MS
+  if(faceListenTimer)clearTimeout(faceListenTimer);
+  faceListenTimer=setTimeout(function(){
+    if(isRec)stopRecAuto();
+  },LISTEN_DURATION_MS);
+}
+
+function stopRecAuto(){
+  if(faceListenTimer){clearTimeout(faceListenTimer);faceListenTimer=null;}
+  if(!isRec)return;isRec=false;
+  try{if(recognition)recognition.stop();}catch(e){}
+  setVIdle();
+  var text=(liveTx||finalTx).trim();
+  document.getElementById('vtrans').textContent=text?'已收到語音':'沒有偵測到語音';
+  document.getElementById('vtrans').classList.remove('active');
+  if(text){sendMsg(text);}
+  // After cycle ends, face detection will naturally re-trigger next round
+}
+function startRec(){
+  if(!activeChar){showNotif('請先選擇角色');return;}
+  if(isRec)return;
+  recognition=initRec();if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
+  stopSpeaking();isRec=true;finalTx='';liveTx='';
+  vbtn.classList.add('rec');vbtn.textContent='🔴';
+  document.getElementById('vhint').textContent='放開發送';
+  document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
+  document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
+  try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
+}
+function stopRec(skipSend){
+  if(!isRec)return;isRec=false;
+  try{if(recognition)recognition.stop();}catch(e){console.warn('recognition stop failed:',e);}
+  setVIdle();
+  var text=(liveTx||finalTx).trim();
+  document.getElementById('vtrans').textContent=text?'已收到語音':'點擊說話';document.getElementById('vtrans').classList.remove('active');
+  if(skipSend)return;
+  if(text){sendMsg(text);}else{showNotif('沒有偵測到語音內容，請再說一次');}
+}
+function setVIdle(){
+  vbtn.classList.remove('rec','speaking');vbtn.textContent='🎙';
+  document.getElementById('vhint').textContent='點擊開始 · 放開發送';
+  document.getElementById('vr1').classList.remove('rec');document.getElementById('vr2').classList.remove('rec');
+}
+function initRec(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return null;
+  var r=new SR();r.lang='zh-TW';r.interimResults=true;r.continuous=true;
+  r.onresult=function(e){
+    var interim='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var tx=e.results[i][0].transcript;if(e.results[i].isFinal){finalTx+=tx;}else{interim+=tx;}
+    }
+    liveTx=(finalTx+interim).trim();document.getElementById('vtrans').textContent=liveTx?'正在聆聽...':'聆聽中...';document.getElementById('vtrans').classList.add('active');
+  };
+  r.onerror=function(e){if(e.error!=='aborted')console.warn('SR:',e.error);if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}};
+  r.onend=function(){if(isRec){try{r.start();}catch(e){}}};return r;
+}
+
+// ── MULTI-AI FAST SPOKENTEXT CYCLE ──
+function sendMsg(text){
+  if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
+  if(!db){showNotif('Firebase 尚未連線');return;}
+  if(!geminiKey){showNotif('Gemini Key 未設定');return;}
+  cancelCurrentCycleAndStartNew(text);
+}
+
+function cancelCurrentCycleAndStartNew(userText){
+  stopSpeaking();
+  localGeneratingKeys={};
+  localPreparingKeys={};
+  lastSpokenKey=null;
+
+  var cycleId=randId('cycle');
+  activeCycleId=cycleId;
+
+  setBubbleText('思考中','thinking');
+  document.getElementById('vtrans').textContent='思考中...';
+  document.getElementById('vtrans').classList.add('active');
 
   db.ref('infectionPrepared/'+cycleId).remove();
   db.ref('infectionLocks/'+cycleId).remove();
+
   db.ref('infectionSession').set({
-    cycleId:cycleId,status:'thinking',step:1,maxSteps:10,
-    currentSpeaker:localRoleIdx,currentTarget:localRoleIdx,sourceSpeaker:'user',
-    startedBy:localRoleIdx,incomingMessage:userText,spokenText:'',
-    updatedAt:Date.now(),createdAt:Date.now(),createdBy:localDeviceId,
-    turnId:turnId
+    cycleId:cycleId,
+    status:'thinking',
+    step:1,
+    maxSteps:10,
+    currentSpeaker:localRoleIdx,
+    currentTarget:localRoleIdx,
+    sourceSpeaker:'user',
+    startedBy:localRoleIdx,
+    incomingMessage:userText,
+    spokenText:'',
+    updatedAt:Date.now(),
+    createdAt:Date.now(),
+    createdBy:localDeviceId
   });
 }
 
@@ -888,229 +671,305 @@ function handleSessionUpdate(session){
   if(!activeChar||localRoleIdx===null)return;
   if(!session||!session.cycleId)return;
 
-  // New cycle arrived — reset local state
   if(activeCycleId!==session.cycleId){
-    activeCycleId=session.cycleId;lastSpokenKey=null;
-    localGeneratingKeys={};localPreparingKeys={};
-    stopSpeakingAudio();
+    activeCycleId=session.cycleId;
+    lastSpokenKey=null;
+    localGeneratingKeys={};
+    localPreparingKeys={};
+    stopSpeaking();
   }
 
-  var isSpeaker=(localRoleIdx===session.currentSpeaker);
-  var isTarget=(localRoleIdx===session.currentTarget);
-  var step=Number(session.step);
-  var maxSteps=Number(session.maxSteps||10);
-
-  // ── THINKING: only the current speaker generates ──
   if(session.status==='thinking'){
-    if(isSpeaker){
-      setBubbleText('思考中...','thinking');
-      setVtrans('思考中...',true);
-      setSystemState('THINKING','思考中...');
+    if(localRoleIdx===session.currentSpeaker){
+      setBubbleText('思考中','thinking');
+      document.getElementById('vtrans').textContent='思考中...';
+      document.getElementById('vtrans').classList.add('active');
       generateCurrentStep(session);
     }else{
-      // Show what we last heard while waiting
-      setBubbleText(session.incomingMessage?'「'+session.incomingMessage+'」':'正在聆聽...','empty');
-      setVtrans('等待中...',false);
+      setBubbleText('正在聆聽...','empty');
+      document.getElementById('vtrans').textContent='正在聆聽...';
+      document.getElementById('vtrans').classList.remove('active');
     }
     return;
   }
 
-  // ── SPEAKING: speaker plays audio; target pre-generates next reply ──
   if(session.status==='speaking'){
-    if(isSpeaker){
-      // Show spoken text and play audio on the speaker device
+    if(localRoleIdx===session.currentSpeaker){
       setBubbleText(session.spokenText||'（訊號中斷）','speaking');
-      setVtrans('說話中...',true);
       speakSessionText(session);
-    }else{
-      // Every non-speaker sees what is being said
-      setBubbleText('「'+(session.spokenText||'...')+'」','empty');
-      if(isTarget&&step<maxSteps){
-        // Target pre-generates its reply while speaker is still talking
-        setVtrans('準備回應...',true);
-        setSystemState('THINKING','準備回應...');
-        prepareNextResponse(session);
-      }else{
-        setVtrans('正在聆聽...',false);
-      }
-    }
-    return;
-  }
-
-  // ── WAITING_NEXT: prepared response is ready, try to advance ──
-  if(session.status==='waiting_next'){
-    if(isTarget&&step<maxSteps){
-      setBubbleText('思考中...','thinking');
-      setVtrans('準備回應...',true);
-      setSystemState('THINKING','準備回應...');
+    }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
+      setBubbleText('思考中','thinking');
+      document.getElementById('vtrans').textContent='思考中...';
+      document.getElementById('vtrans').classList.add('active');
+      // 速度優化：目前角色一開始說話，下一個角色就立刻用 spokenText 思考。
       prepareNextResponse(session);
-      tryAdvanceFromWaiting(session.cycleId,step);
     }else{
       setBubbleText('正在聆聽...','empty');
-      setVtrans('正在聆聽...',false);
+      document.getElementById('vtrans').textContent='正在聆聽...';
+      document.getElementById('vtrans').classList.remove('active');
     }
     return;
   }
 
-  // ── ENDED ──
-  if(session.status==='ended'){
-    stopSpeakingAudio();
-    setBubbleText(session.spokenText||'對話循環結束','empty');
-    setVtrans('循環結束，請再說話',false);
-    setSystemState('IDLE','循環結束');
-    faceDetectedStart=null;
+  if(session.status==='waiting_next'){
+    if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
+      setBubbleText('思考中','thinking');
+      document.getElementById('vtrans').textContent='思考中...';
+      document.getElementById('vtrans').classList.add('active');
+      prepareNextResponse(session);
+      tryAdvanceFromWaiting(session.cycleId,Number(session.step));
+    }else{
+      setBubbleText('正在聆聽...','empty');
+      document.getElementById('vtrans').textContent='正在聆聽...';
+      document.getElementById('vtrans').classList.remove('active');
+    }
     return;
   }
-}
 
-// Helper: update vtrans text and active class
-function setVtrans(text,active){
-  var el=document.getElementById('vtrans');if(!el)return;
-  el.textContent=text;
-  el.classList.toggle('active',!!active);
+  if(session.status==='ended'){
+    stopSpeaking();
+    if(localRoleIdx===session.currentSpeaker&&session.spokenText){
+      setBubbleText(session.spokenText,'speaking');
+    }else{
+      setBubbleText('循環結束','empty');
+    }
+    document.getElementById('vtrans').textContent='點擊說話';
+    document.getElementById('vtrans').classList.remove('active');
+    return;
+  }
 }
 
 function getOnlineRoleIndices(){
-  var arr=[];for(var i=0;i<3;i++){if(onlineRoles[i])arr.push(i);}
-  if(!arr.length){arr=[0,1,2];}return arr;
+  var arr=[];
+  for(var i=0;i<3;i++){if(onlineRoles[i])arr.push(i);}
+  // presence 尚未讀到時，允許三角色 demo 先運作；presence 讀到後就只選在線角色。
+  if(!arr.length){arr=[0,1,2];}
+  return arr;
 }
+
 function chooseRandomTarget(currentRoleIdx){
   var options=getOnlineRoleIndices().filter(function(i){return i!==currentRoleIdx;});
   if(!options.length)return null;
   return options[Math.floor(Math.random()*options.length)];
 }
+
 function acquireStepLock(cycleId,step,roleIdx){
   var ref=db.ref('infectionLocks/'+cycleId+'/step_'+step);
   return ref.transaction(function(cur){
-    var now=Date.now();if(cur&&cur.lockedAt&&now-cur.lockedAt<60000){return;}
+    var now=Date.now();
+    if(cur&&cur.lockedAt&&now-cur.lockedAt<60000){return;}
     return {roleIdx:roleIdx,deviceId:localDeviceId,lockedAt:now};
   }).then(function(res){return !!res.committed;}).catch(function(e){console.warn('lock failed',e);return false;});
 }
 
 async function generateCurrentStep(session){
   var key=session.cycleId+'_step_'+session.step+'_current';
-  if(localGeneratingKeys[key])return;localGeneratingKeys[key]=true;
+  if(localGeneratingKeys[key])return;
+  localGeneratingKeys[key]=true;
+
   var locked=await acquireStepLock(session.cycleId,session.step,localRoleIdx);
-  if(!locked){
-    // Lock taken by another device — wait and check if they finished
-    console.log('[generateCurrentStep] lock taken, waiting for other device...');
-    setTimeout(async function(){
-      if(activeCycleId!==session.cycleId)return;
-      var snap=await db.ref('infectionSession').once('value');
-      var cur=snap.val();
-      // If still stuck in thinking for this step, retry
-      if(cur&&cur.cycleId===session.cycleId&&cur.status==='thinking'&&Number(cur.step)===Number(session.step)){
-        console.log('[generateCurrentStep] still stuck, forcing retry');
-        localGeneratingKeys[key]=false;
-        generateCurrentStep(session);
-      }
-    },8000);
-    return;
-  }
+  if(!locked)return;
+
   try{
     if(activeCycleId!==session.cycleId)return;
     var role=charsData['node'+session.currentSpeaker];
     if(!role)throw new Error('找不到角色資料 node'+session.currentSpeaker);
-    var result=await generateRoleResponse(session.currentSpeaker,session.incomingMessage||session.spokenText||'',session.sourceSpeaker,session.cycleId,session.step);
+
+    var result=await generateRoleResponse(
+      session.currentSpeaker,
+      session.incomingMessage||session.spokenText||'',
+      session.sourceSpeaker,
+      session.cycleId,
+      session.step
+    );
+
     if(activeCycleId!==session.cycleId)return;
+
     var nextTarget=null;
-    if(Number(session.step)<Number(session.maxSteps||10)){nextTarget=chooseRandomTarget(session.currentSpeaker);}
-    if(nextTarget===null&&Number(session.step)<Number(session.maxSteps||10)){
-      await db.ref('infectionSession').update({status:'ended',spokenText:result.spokenText,currentSpeaker:session.currentSpeaker,currentTarget:null,endedReason:'no_online_target',updatedAt:Date.now()});
-      showNotif('等待其他節點連線');return;
+    if(Number(session.step)<Number(session.maxSteps||10)){
+      nextTarget=chooseRandomTarget(session.currentSpeaker);
     }
-    await db.ref('infectionSession').update({status:'speaking',currentSpeaker:session.currentSpeaker,currentTarget:nextTarget,sourceSpeaker:session.sourceSpeaker,spokenText:result.spokenText,incomingMessage:session.incomingMessage||'',speakingStartedAt:Date.now(),updatedAt:Date.now()});
-  }catch(e){
-    console.warn('generateCurrentStep error:',e);
-    // Check if it's an API key error — show clear message and stop cycle
-    var isKeyError=e.message&&(e.message.indexOf('API Key not found')>=0||e.message.indexOf('API_KEY_INVALID')>=0||e.message.indexOf('400')>=0);
-    if(isKeyError){
-      showNotif('Gemini API Key 無效\n請返回重新輸入正確的 Key');
-      setSystemState('IDLE','Gemini Key 錯誤');
-      sk('ie_gk','');geminiKey='';
-      setTimeout(function(){document.getElementById('key-overlay').classList.remove('hidden');},1500);
-      await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'api_key_invalid',updatedAt:Date.now()});
+
+    if(nextTarget===null&&Number(session.step)<Number(session.maxSteps||10)){
+      await db.ref('infectionSession').update({
+        status:'ended',
+        spokenText:result.spokenText,
+        currentSpeaker:session.currentSpeaker,
+        currentTarget:null,
+        endedReason:'no_online_target',
+        updatedAt:Date.now()
+      });
+      showNotif('等待其他節點連線');
       return;
     }
+
+    // spokenText 一生成完成，就馬上更新 session 成 speaking。
+    // 下一個 target 會立刻收到這段 spokenText 並開始背景思考，同時目前角色開始播放語音。
+    await db.ref('infectionSession').update({
+      status:'speaking',
+      currentSpeaker:session.currentSpeaker,
+      currentTarget:nextTarget,
+      sourceSpeaker:session.sourceSpeaker,
+      spokenText:result.spokenText,
+      incomingMessage:session.incomingMessage||'',
+      speakingStartedAt:Date.now(),
+      updatedAt:Date.now()
+    });
+  }catch(e){
+    console.warn('generateCurrentStep error:',e);
     if(activeCycleId===session.cycleId){
-      await db.ref('infectionSession').update({status:'ended',spokenText:'訊號暫時中斷，請再試一次。',endedReason:e.message,updatedAt:Date.now()});
+      await db.ref('infectionSession').update({
+        status:'ended',
+        spokenText:'訊號暫時中斷，請再試一次。',
+        endedReason:e.message,
+        updatedAt:Date.now()
+      });
     }
   }
 }
 
 async function prepareNextResponse(session){
   var nextStep=Number(session.step)+1;
-  var maxSteps=Number(session.maxSteps||10);
-  if(nextStep>maxSteps)return;
+  if(nextStep>Number(session.maxSteps||10))return;
+
   var key=session.cycleId+'_step_'+nextStep+'_prepare';
-  if(localPreparingKeys[key])return;localPreparingKeys[key]=true;
+  if(localPreparingKeys[key])return;
+  localPreparingKeys[key]=true;
+
   var prepRef=db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep);
-  var existing=await prepRef.once('value');if(existing.exists()){
-    console.log('[prepareNextResponse] step '+nextStep+' already prepared, trying advance');
-    await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
-    return;
-  }
+  var existing=await prepRef.once('value');
+  if(existing.exists())return;
+
   var locked=await acquireStepLock(session.cycleId,nextStep,localRoleIdx);
-  if(!locked){console.log('[prepareNextResponse] lock failed for step '+nextStep);return;}
+  if(!locked)return;
+
   try{
     if(activeCycleId!==session.cycleId)return;
+
+    // 新邏輯：目前角色說出口的 spokenText，就是下一個角色聽到的內容。
     var incoming=session.spokenText||session.incomingMessage||'';
-    console.log('[prepareNextResponse] node'+localRoleIdx+' generating step '+nextStep+' from: '+incoming.slice(0,30));
     var result=await generateRoleResponse(localRoleIdx,incoming,session.currentSpeaker,session.cycleId,nextStep);
+
     if(activeCycleId!==session.cycleId)return;
-    // Choose next target (can be null at last step)
+
     var nextTarget=null;
-    if(nextStep<maxSteps){nextTarget=chooseRandomTarget(localRoleIdx);}
-    console.log('[prepareNextResponse] node'+localRoleIdx+' prepared step '+nextStep+': '+result.spokenText.slice(0,30));
+    if(nextStep<Number(session.maxSteps||10)){
+      nextTarget=chooseRandomTarget(localRoleIdx);
+    }
+
     await prepRef.set({
-      cycleId:session.cycleId,step:nextStep,speaker:localRoleIdx,
-      sourceSpeaker:session.currentSpeaker,incomingMessage:incoming,
-      spokenText:result.spokenText,nextTarget:nextTarget,
-      ready:true,createdAt:Date.now(),createdBy:localDeviceId
+      cycleId:session.cycleId,
+      step:nextStep,
+      speaker:localRoleIdx,
+      sourceSpeaker:session.currentSpeaker,
+      incomingMessage:incoming,
+      spokenText:result.spokenText,
+      nextTarget:nextTarget,
+      ready:true,
+      createdAt:Date.now(),
+      createdBy:localDeviceId
     });
+
+    // 如果上一個角色已經說完並正在等待，prepared 一完成就立刻推進。
     await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
   }catch(e){
-    console.warn('[prepareNextResponse] error:',e);
-    localPreparingKeys[key]=false; // allow retry
+    console.warn('prepareNextResponse error:',e);
   }
 }
 
 async function advanceAfterSpeaking(session){
   if(!db||activeCycleId!==session.cycleId)return;
-  var currentSnap=await db.ref('infectionSession').once('value');var current=currentSnap.val();
+
+  var currentSnap=await db.ref('infectionSession').once('value');
+  var current=currentSnap.val();
   if(!current||current.cycleId!==session.cycleId||Number(current.step)!==Number(session.step)||current.status!=='speaking')return;
+
   if(Number(session.step)>=Number(session.maxSteps||10)){
-    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});return;
+    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});
+    return;
   }
+
   var nextStep=Number(session.step)+1;
-  var prepSnap=await db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep).once('value');var prep=prepSnap.val();
+  var prepSnap=await db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep).once('value');
+  var prep=prepSnap.val();
+
   if(prep&&prep.ready){
-    await db.ref('infectionSession').set({cycleId:session.cycleId,status:'speaking',step:nextStep,maxSteps:session.maxSteps||10,currentSpeaker:prep.speaker,currentTarget:prep.nextTarget,sourceSpeaker:prep.sourceSpeaker,startedBy:session.startedBy,incomingMessage:prep.incomingMessage,spokenText:prep.spokenText,speakingStartedAt:Date.now(),updatedAt:Date.now(),createdAt:session.createdAt||Date.now()});
+    await db.ref('infectionSession').set({
+      cycleId:session.cycleId,
+      status:'speaking',
+      step:nextStep,
+      maxSteps:session.maxSteps||10,
+      currentSpeaker:prep.speaker,
+      currentTarget:prep.nextTarget,
+      sourceSpeaker:prep.sourceSpeaker,
+      startedBy:session.startedBy,
+      incomingMessage:prep.incomingMessage,
+      spokenText:prep.spokenText,
+      speakingStartedAt:Date.now(),
+      updatedAt:Date.now(),
+      createdAt:session.createdAt||Date.now()
+    });
   }else{
-    await db.ref('infectionSession').update({status:'waiting_next',currentTarget:session.currentTarget,incomingMessage:session.spokenText||'',updatedAt:Date.now()});
+    await db.ref('infectionSession').update({
+      status:'waiting_next',
+      currentTarget:session.currentTarget,
+      incomingMessage:session.spokenText||'',
+      updatedAt:Date.now()
+    });
   }
 }
 
 async function tryAdvanceFromWaiting(cycleId,finishedStep){
   if(!db||activeCycleId!==cycleId)return;
-  var snap=await db.ref('infectionSession').once('value');var session=snap.val();
+
+  var snap=await db.ref('infectionSession').once('value');
+  var session=snap.val();
   if(!session||session.cycleId!==cycleId||session.status!=='waiting_next'||Number(session.step)!==Number(finishedStep))return;
+
   if(Number(session.step)>=Number(session.maxSteps||10)){
-    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});return;
+    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});
+    return;
   }
+
   var nextStep=Number(session.step)+1;
-  var prepSnap=await db.ref('infectionPrepared/'+cycleId+'/step_'+nextStep).once('value');var prep=prepSnap.val();
+  var prepSnap=await db.ref('infectionPrepared/'+cycleId+'/step_'+nextStep).once('value');
+  var prep=prepSnap.val();
   if(!prep||!prep.ready)return;
-  var latestSnap=await db.ref('infectionSession').once('value');var latest=latestSnap.val();
+
+  // 再讀一次，避免多台設備同時 advance 造成重複播放。
+  var latestSnap=await db.ref('infectionSession').once('value');
+  var latest=latestSnap.val();
   if(!latest||latest.cycleId!==cycleId||latest.status!=='waiting_next'||Number(latest.step)!==Number(finishedStep))return;
-  await db.ref('infectionSession').set({cycleId:cycleId,status:'speaking',step:nextStep,maxSteps:session.maxSteps||10,currentSpeaker:prep.speaker,currentTarget:prep.nextTarget,sourceSpeaker:prep.sourceSpeaker,startedBy:session.startedBy,incomingMessage:prep.incomingMessage,spokenText:prep.spokenText,speakingStartedAt:Date.now(),updatedAt:Date.now(),createdAt:session.createdAt||Date.now()});
+
+  await db.ref('infectionSession').set({
+    cycleId:cycleId,
+    status:'speaking',
+    step:nextStep,
+    maxSteps:session.maxSteps||10,
+    currentSpeaker:prep.speaker,
+    currentTarget:prep.nextTarget,
+    sourceSpeaker:prep.sourceSpeaker,
+    startedBy:session.startedBy,
+    incomingMessage:prep.incomingMessage,
+    spokenText:prep.spokenText,
+    speakingStartedAt:Date.now(),
+    updatedAt:Date.now(),
+    createdAt:session.createdAt||Date.now()
+  });
 }
 
 function parseSpokenText(raw){
   var txt=String(raw||'').trim();
   txt=txt.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```$/,'').trim();
+
   var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
-  if(first>=0&&last>first){try{var obj=JSON.parse(txt.slice(first,last+1));return {spokenText:clampText(obj.spokenText||obj.visibleText||obj.text||obj.reply||txt,120)};}catch(e){}}
+  if(first>=0&&last>first){
+    try{
+      var obj=JSON.parse(txt.slice(first,last+1));
+      return {spokenText:clampText(obj.spokenText||obj.visibleText||obj.text||obj.reply||txt,120)};
+    }catch(e){}
+  }
+
   txt=txt.replace(/⟳ 感染紀錄：/g,'\n感染紀錄：');
   return {spokenText:clampText((txt.split('\n')[0]||txt),120)};
 }
@@ -1118,16 +977,26 @@ function parseSpokenText(raw){
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step){
   var role=charsData['node'+roleIdx];
   if(!role)throw new Error('缺少角色資料');
+
   var sourceName=(sourceRoleIdx==='user')?'使用者':((charsData['node'+sourceRoleIdx]&&charsData['node'+sourceRoleIdx].name)||('節點 '+(Number(sourceRoleIdx)+1)));
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
+
   var sys='你是「'+role.name+'」。你的個性：'+role.persona+'\n性格標籤：'+(role.traits||[]).join('、')+'\n扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n\n你正在參與一個三個 AI 角色互相傳話的系統。上一個訊息來自：'+sourceName+'。你聽到的內容就是上一個角色說出口的話，或使用者剛剛說的話。\n\n你必須根據自己的性格、偏見、情緒與扭曲強度，把這段話重新理解後，用你的角色語氣說出來。\n\n規則：\n- 只使用繁體中文\n- 像正在和另一個角色對話\n- 口語化、自然、有角色感\n- 不要解釋設定\n- 不要輸出思考過程\n- 不要輸出英文\n- 不要輸出條列\n- 不要太長，1-2句即可\n- 只輸出合法 JSON，不要 markdown\n- JSON 格式必須是：{"spokenText":"你的台詞"}';
   var user='你剛剛聽到的內容：'+incomingMessage;
-  var controller=new AbortController();
-  var fetchTimeout=setTimeout(function(){controller.abort();},25000);
-  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.82,response_mime_type:'application/json'}}),signal:controller.signal});
-  clearTimeout(fetchTimeout);
+
+  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
+    body:JSON.stringify({
+      system_instruction:{parts:[{text:sys}]},
+      contents:[{role:'user',parts:[{text:user}]}],
+      generationConfig:{temperature:0.82,response_mime_type:'application/json'}
+    })
+  });
+
   var data=await resp.json();
   if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+
   var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
   var parsed=parseSpokenText(raw);
   if(!parsed.spokenText)parsed.spokenText='我覺得這件事沒有那麼單純。';
@@ -1137,42 +1006,36 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
 // ── SPEAKING ──
 function speakSessionText(session){
   var key=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
-  if(lastSpokenKey===key)return;lastSpokenKey=key;
+  if(lastSpokenKey===key)return;
+  lastSpokenKey=key;
 
-  setSystemState('TALKING','AI 說話中...');
-  setBubbleText(session.spokenText||'（訊號中斷）','speaking');
+  vbtn.classList.add('speaking');
+  vbtn.textContent='🔊';
+  document.getElementById('swave').classList.add('on');
+  document.getElementById('vhint').textContent='AI 說話中...';
+  document.getElementById('vtrans').textContent='AI 說話中...';
+  document.getElementById('vtrans').classList.add('active');
+  setModelState('speaking');
 
-  // Always use the speaking role's voice, not necessarily activeChar
   var role=charsData['node'+session.currentSpeaker]||activeChar;
   var v=(role&&role.voice)||{};
-  var speakerName=(role&&role.name)||'AI';
 
-  console.log('[speakSessionText] step:'+session.step+' speaker:'+session.currentSpeaker+' ('+speakerName+') → '+session.spokenText);
-
-  elevenSpeak(session.spokenText||'',v.name||'',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
-    if(activeCycleId!==session.cycleId){
-      console.log('[speakSessionText] stale cycle, skipping advance');
-      return;
-    }
-    console.log('[speakSessionText] finished speaking step:'+session.step+', advancing...');
+  elevenSpeak(session.spokenText||'',v.name||'ShanShan',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
+    if(activeCycleId!==session.cycleId)return;
+    setVIdle();
     document.getElementById('swave').classList.remove('on');
     setModelState('idle');
-    // Advance Firebase first, then reset local state
-    advanceAfterSpeaking(session).then(function(){
-      if(activeCycleId===session.cycleId){
-        // Only reset to IDLE if no new session came in
-        // (handleSessionUpdate will set correct state if next step arrives)
-      }
-    });
+    advanceAfterSpeaking(session);
   });
 }
 
-// Stop only the audio (not the whole cycle state)
-function stopSpeakingAudio(){
+function stopSpeaking(){
   if(currentAudio){try{currentAudio.pause();currentAudio.currentTime=0;}catch(e){}currentAudio=null;}
   if(currentAudioUrl){try{URL.revokeObjectURL(currentAudioUrl);}catch(e){}currentAudioUrl=null;}
   if(speechSynthesis.speaking)speechSynthesis.cancel();
   document.getElementById('swave').classList.remove('on');
+  setVIdle();
+  setModelState('idle');
 }
 
 // ── ELEVENLABS ──
@@ -1199,9 +1062,8 @@ async function getVoiceId(name){
 }
 function preloadCharacterVoice(charData){if(!elevenKey||!charData||!charData.voice||!charData.voice.name)return;getVoiceId(charData.voice.name).then(function(vid){if(vid)console.log('Voice preloaded:',charData.voice.name,vid);});}
 function preloadPublishedVoices(data){
-  if(!elevenKey||!data)return;var names=[];
-  Object.keys(data).forEach(function(k){var c=data[k];if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);});
-  if(!names.length)return;loadElevenVoices().then(function(){names.forEach(function(name){getVoiceId(name);});});
+  if(!elevenKey||!data)return;var names=[];Object.keys(data).forEach(function(k){var c=data[k];if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);});
+  if(!names.length)return;loadElevenVoices().then(function(){names.forEach(function(name){getVoiceId(name);});console.log('Published voices preloaded:',names.join(', '));});
 }
 async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
   if(!text){if(onDone)onDone();return;}
@@ -1211,49 +1073,19 @@ async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
     var resp=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid+'/stream',{method:'POST',headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},body:JSON.stringify({text:text,model_id:'eleven_multilingual_v2',voice_settings:{stability:stability||0.4,similarity_boost:similarity||0.75,speed:Math.min(1.2,Math.max(0.7,rate||1.0))}})});
     if(!resp.ok){var e=await resp.json();throw new Error(JSON.stringify(e.detail||e));}
     var blob=await resp.blob();var url=URL.createObjectURL(blob);currentAudioUrl=url;currentAudio=new Audio(url);
-
-    var done=false;
-    function finish(){
-      if(done)return;done=true;
-      try{URL.revokeObjectURL(url);}catch(e){}
-      currentAudio=null;currentAudioUrl=null;
-      if(onDone)onDone();
-    }
-
-    currentAudio.onended=finish;
-    currentAudio.onerror=function(){
-      console.warn('Audio error, falling back');
-      try{URL.revokeObjectURL(url);}catch(e){}
-      currentAudio=null;currentAudioUrl=null;
-      fallbackSpeak(text,onDone);
-    };
-
-    // iOS Safari: audio.play() returns a promise, must handle it
-    var playPromise=currentAudio.play();
-    if(playPromise!==undefined){
-      playPromise.catch(function(err){
-        console.warn('Audio play failed:',err);
-        // iOS often blocks autoplay — use fallback
-        try{URL.revokeObjectURL(url);}catch(e){}
-        currentAudio=null;currentAudioUrl=null;
-        fallbackSpeak(text,onDone);
-      });
-    }
-
-    // Safety timeout: if onended never fires (iOS bug), advance after estimated duration
-    var estimatedMs=Math.max(3000,text.length*120);
-    setTimeout(function(){
-      if(!done){
-        console.warn('[elevenSpeak] onended timeout, forcing advance');
-        finish();
-      }
-    },estimatedMs);
-
+    var _audioDone=false;
+    function _finishAudio(){if(_audioDone)return;_audioDone=true;try{URL.revokeObjectURL(url);}catch(e){}currentAudio=null;currentAudioUrl=null;if(onDone)onDone();}
+    currentAudio.onended=_finishAudio;
+    currentAudio.onerror=function(){try{URL.revokeObjectURL(url);}catch(e){}currentAudio=null;currentAudioUrl=null;fallbackSpeak(text,onDone);};
+    currentAudio.play().catch(function(err){console.warn('Audio play failed:',err);fallbackSpeak(text,onDone);});
+    // iOS safety: if onended never fires, force advance after estimated time
+    var _estMs=Math.max(4000,text.length*130);
+    setTimeout(function(){if(!_audioDone){console.warn('[elevenSpeak] timeout fallback');_finishAudio();}},_estMs);
   }catch(err){console.warn('ElevenLabs error:',err.message);fallbackSpeak(text,onDone);}
 }
 function fallbackSpeak(text,onDone){var u=new SpeechSynthesisUtterance(text);u.lang='zh-TW';u.onend=onDone;u.onerror=onDone;speechSynthesis.speak(u);}
 
-// ── ADMIN: Voice testing ──
+// ── ADMIN: 測試與查詢 ──
 async function testElevenLabs(){
   if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}showNotif('測試中...');
   try{
@@ -1282,27 +1114,9 @@ async function fetchVoiceList(){
 }
 
 // ── INIT ──
-buildTraits();
-speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};
-speechSynthesis.getVoices();
+buildTraits();speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
+(function(){var g=gk('ie_gk'),el=gk('ie_ek');if(g&&el){geminiKey=g;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}})();
 
-// Patch initRec's onresult to also trigger silence detection
-var _origInitRec=initRec;
-initRec=function(){
-  var r=_origInitRec();
-  if(!r)return r;
-  var _origOnResult=r.onresult;
-  r.onresult=function(e){
-    _origOnResult&&_origOnResult.call(this,e);
-    onSpeechActivity();
-  };
-  return r;
-};
-
-(function(){
-  var g=gk('ie_gk'),el=gk('ie_ek');
-  if(g&&el){geminiKey=g;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}
-})();
 </script>
 </body>
 </html>

@@ -506,9 +506,11 @@ var FACE_HOLD_MS=1500;       // face must be present 1.5s before listening start
 var LISTEN_DURATION_MS=8000; // auto-listen for 8 seconds then submit
 
 // ── 打斷設定（可調整）──
-var INTERRUPT_RMS_THRESHOLD=0.03; // 音量超過 0.03 即視為使用者想打斷
+// 新邏輯：只有在 AI 說話中，且「這台裝置最近偵測到雙眼可見」＋「麥克風音量超過門檻」才會觸發打斷。
+var INTERRUPT_RMS_THRESHOLD=0.02; // 音量超過 0.02 才視為使用者想打斷
 var INTERRUPT_HOLD_MS=200;        // 持續超過 200ms 觸發打斷
 var INTERRUPT_COOLDOWN_MS=1000;   // 打斷後冷卻時間，防止連續觸發
+var INTERRUPT_EYE_VALID_MS=500;   // 最近 500ms 內必須偵測到雙眼可見，才允許打斷
 
 // 打斷狀態
 var interruptAudioCtx=null;
@@ -517,6 +519,8 @@ var interruptMicStream=null;
 var interruptRaf=null;
 var voiceStartTime=null;
 var lastInterruptTime=0;
+var interruptEyesVisible=false;
+var lastInterruptEyesAt=0;
 
 // ── 打斷功能（麥克風音量偵測）──
 function initInterruptDetection(){
@@ -541,10 +545,15 @@ function startInterruptLoop(){
   var buf=new Float32Array(interruptAnalyser.fftSize);
   function loop(){
     interruptRaf=requestAnimationFrame(loop);
-    // 只在 AI 說話時偵測
+    // 只在 AI 說話時偵測打斷
     if(modelState!=='speaking'){voiceStartTime=null;return;}
     // 冷卻中不偵測
     if(Date.now()-lastInterruptTime<INTERRUPT_COOLDOWN_MS){return;}
+
+    // 只有這台裝置最近有偵測到正面雙眼，才允許音量打斷。
+    // 這可以降低三台裝置彼此麥克風太近造成的誤觸發。
+    var eyesFresh=interruptEyesVisible&&(Date.now()-lastInterruptEyesAt<INTERRUPT_EYE_VALID_MS);
+    if(!eyesFresh){voiceStartTime=null;return;}
 
     interruptAnalyser.getFloatTimeDomainData(buf);
     var rms=0;
@@ -639,80 +648,91 @@ function initFaceDetection(){
   });
 }
 
+function getBothEyesVisibleFromFaceResults(results){
+  var facePresent=results&&results.detections&&results.detections.length>0;
+  if(!facePresent)return false;
+
+  var det=results.detections[0];
+
+  // ── 雙眼偵測邏輯 ──
+  // MediaPipe Face Detection keypoints 順序：
+  // 0=右眼, 1=左眼, 2=鼻尖, 3=嘴巴, 4=右耳, 5=左耳
+  var kps=null;
+  if(det.keypoints&&det.keypoints.length>=2){
+    kps=det.keypoints;
+  }else if(det.locationData&&det.locationData.relativeKeypoints&&det.locationData.relativeKeypoints.length>=2){
+    kps=det.locationData.relativeKeypoints;
+  }
+
+  var bothEyesVisible=false;
+
+  if(kps&&kps.length>=2){
+    var re=kps[0]; // 右眼
+    var le=kps[1]; // 左眼
+
+    // 兩眼都要在畫面內（避免只拍到側臉或半張臉）
+    var reInFrame=(re.x>0.05&&re.x<0.95&&re.y>0.05&&re.y<0.95);
+    var leInFrame=(le.x>0.05&&le.x<0.95&&le.y>0.05&&le.y<0.95);
+
+    // 兩眼間距要夠寬（側臉時間距會變小）
+    var eyeDist=Math.abs(le.x-re.x);
+    var eyeSpanOk=(eyeDist>0.06);
+
+    // 兩眼高度差不能太大（側臉或角度太偏時容易一高一低）
+    var eyeHeightDiff=Math.abs(le.y-re.y);
+    var eyeLevelOk=(eyeHeightDiff<0.08);
+
+    bothEyesVisible=(reInFrame&&leInFrame&&eyeSpanOk&&eyeLevelOk);
+  }else{
+    // keypoints 不可用時，fallback 到臉部置中判斷
+    var box=det.boundingBox||(det.locationData&&det.locationData.relativeBoundingBox)||null;
+    if(box){
+      var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
+      bothEyesVisible=(cx>0.2&&cx<0.8);
+    }else{
+      bothEyesVisible=true;
+    }
+  }
+
+  return bothEyesVisible;
+}
+
+function updateInterruptEyeState(results){
+  var bothEyesVisible=getBothEyesVisibleFromFaceResults(results);
+  interruptEyesVisible=bothEyesVisible;
+  if(bothEyesVisible){
+    lastInterruptEyesAt=Date.now();
+  }
+  return bothEyesVisible;
+}
+
 function onFaceResults(results){
-  // Only respond when in chat and role selected, and NOT already recording or speaking
   if(!activeChar||localRoleIdx===null)return;
+
+  // 先更新 interrupt 專用的雙眼狀態。
+  // 注意：這一步必須在 isSubmitting / speaking return 之前，
+  // 否則 AI 說話中就無法更新雙眼可見狀態，打斷條件會失效。
+  var bothEyesVisible=updateInterruptEyeState(results);
+
+  // 以下維持原本「臉部偵測自動啟動聆聽」邏輯：
+  // 錄音中、正在提交、AI 說話中，都不會因臉部偵測而重新啟動聆聽。
   if(isRec)return;
   if(isSubmitting)return;
   if(modelState==='speaking')return;
 
-  var facePresent=results.detections&&results.detections.length>0;
-
-  if(facePresent){
-    var det=results.detections[0];
-
-    // ── 瞳孔（雙眼）偵測邏輯 ──
-    // MediaPipe Face Detection keypoints 順序：
-    // 0=右眼, 1=左眼, 2=鼻尖, 3=嘴巴, 4=右耳, 5=左耳
-    var kps=null;
-    if(det.keypoints&&det.keypoints.length>=2){
-      kps=det.keypoints;
-    }else if(det.locationData&&det.locationData.relativeKeypoints&&det.locationData.relativeKeypoints.length>=2){
-      kps=det.locationData.relativeKeypoints;
-    }
-
-    var bothEyesVisible=false;
-    var eyeSpanOk=false;
-
-    if(kps&&kps.length>=2){
-      var re=kps[0]; // 右眼
-      var le=kps[1]; // 左眼
-      var rex=re.x!==undefined?re.x:(re.x||0);
-      var ley=le.x!==undefined?le.x:(le.x||0);
-
-      // 兩眼都要在畫面內（0.1~0.9 範圍）
-      var reInFrame=(re.x>0.05&&re.x<0.95&&re.y>0.05&&re.y<0.95);
-      var leInFrame=(le.x>0.05&&le.x<0.95&&le.y>0.05&&le.y<0.95);
-      bothEyesVisible=(reInFrame&&leInFrame);
-
-      // 兩眼間距要夠寬（側臉時間距會很小）
-      // 正面時兩眼間距約 0.08~0.35（相對畫面寬度）
-      var eyeDist=Math.abs(le.x-re.x);
-      eyeSpanOk=(eyeDist>0.06);
-
-      // 兩眼高度差不能太大（側臉時一高一低）
-      var eyeHeightDiff=Math.abs(le.y-re.y);
-      var eyeLevelOk=(eyeHeightDiff<0.08);
-
-      bothEyesVisible=bothEyesVisible&&eyeSpanOk&&eyeLevelOk;
-    }else{
-      // keypoints 不可用，fallback 到置中判斷
-      var box=det.boundingBox||(det.locationData&&det.locationData.relativeBoundingBox)||null;
-      if(box){
-        var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
-        bothEyesVisible=(cx>0.2&&cx<0.8);
-      }else{
-        bothEyesVisible=true;
-      }
-    }
-
-    if(!bothEyesVisible){
-      faceDetectedStart=null;
-      return;
-    }
-
-    if(!faceDetectedStart)faceDetectedStart=Date.now();
-    var held=Date.now()-faceDetectedStart;
-
-    if(held>=FACE_HOLD_MS&&!isRec){
-      faceDetectedStart=null;
-      startRecAuto();
-    }
-  }else{
+  if(!bothEyesVisible){
     faceDetectedStart=null;
+    return;
+  }
+
+  if(!faceDetectedStart)faceDetectedStart=Date.now();
+  var held=Date.now()-faceDetectedStart;
+
+  if(held>=FACE_HOLD_MS&&!isRec){
+    faceDetectedStart=null;
+    startRecAuto();
   }
 }
-
 function startRecAuto(){
   if(isRec||!activeChar)return;
   recognition=initRec();

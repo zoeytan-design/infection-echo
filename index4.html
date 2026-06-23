@@ -1177,9 +1177,11 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var sys='你是「'+role.name+'」。個性：'+role.persona+'\n標籤：'+(role.traits||[]).join('、')+'\n扭曲：'+(role.distort||3)+'/5。\n來自：'+sourceName+'。\n\n【重要】只能輸出純 JSON，格式必須是：{"spokenText":"台詞"}\n不可以有任何其他文字、說明、markdown、換行。\n用繁體中文，1句話，符合角色個性。';
   var user='你剛剛聽到的內容：'+incomingMessage;
 
+  // Merge system prompt into user message (AQ. keys don't support system_instruction)
   var body=JSON.stringify({
-    system_instruction:{parts:[{text:sys}]},
-    contents:[{role:'user',parts:[{text:user}]}],
+    contents:[
+      {role:'user',parts:[{text:sys+'\n\n使用者說的話：'+user+'\n\n記住：只輸出純JSON格式 {"spokenText":"台詞"}，不要任何其他文字。'}]}
+    ],
     generationConfig:{temperature:0.82,response_mime_type:'application/json',maxOutputTokens:80}
   });
 

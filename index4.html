@@ -276,6 +276,9 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 
 <script>
 // ── CONFIG ──
+// Gemini model — change here if needed
+var GEMINI_MODEL='gemini-2.5-flash-lite';
+
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
@@ -292,6 +295,7 @@ var currentAudio=null,currentAudioUrl=null;
 var localDeviceId=gk('ie_device_id')||('dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8));
 sk('ie_device_id',localDeviceId);
 var localRoleIdx=null;
+var isSubmitting=false;
 var onlineRoles={};
 var activeCycleId=null;
 var lastSpokenKey=null;
@@ -532,6 +536,7 @@ function onFaceResults(results){
   // Only respond when in chat and role selected, and NOT already recording or speaking
   if(!activeChar||localRoleIdx===null)return;
   if(isRec)return; // already listening
+  if(isSubmitting)return; // waiting for AI
   if(modelState==='speaking')return; // AI is talking
 
   var facePresent=results.detections&&results.detections.length>0;
@@ -584,8 +589,10 @@ function stopRecAuto(){
   var text=(liveTx||finalTx).trim();
   document.getElementById('vtrans').textContent=text?'已收到語音':'沒有偵測到語音';
   document.getElementById('vtrans').classList.remove('active');
-  if(text){sendMsg(text);}
-  // After cycle ends, face detection will naturally re-trigger next round
+  if(text&&!isSubmitting){
+    isSubmitting=true;
+    sendMsg(text);
+  }
 }
 function startRec(){
   if(!activeChar){showNotif('請先選擇角色');return;}
@@ -728,12 +735,16 @@ function handleSessionUpdate(session){
 
   if(session.status==='ended'){
     stopSpeaking();
-    if(localRoleIdx===session.currentSpeaker&&session.spokenText){
+    isSubmitting=false;
+    faceDetectedStart=null;
+    if(session.endedReason==='model_not_found'){
+      setBubbleText('AI 模型不可用，請檢查 API Key','empty');
+    }else if(localRoleIdx===session.currentSpeaker&&session.spokenText){
       setBubbleText(session.spokenText,'speaking');
     }else{
       setBubbleText('循環結束','empty');
     }
-    document.getElementById('vtrans').textContent='點擊說話';
+    document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
     document.getElementById('vtrans').classList.remove('active');
     return;
   }
@@ -816,8 +827,19 @@ async function generateCurrentStep(session){
       updatedAt:Date.now()
     });
   }catch(e){
-    console.warn('generateCurrentStep error:',e);
+    console.error('[generateCurrentStep] error:',e.message);
     if(activeCycleId===session.cycleId){
+      var msg=e.message||'';
+      // 404 = wrong model name, don't retry
+      if(msg.indexOf('404')>=0||msg.indexOf('not found')>=0||msg.indexOf('not supported')>=0){
+        showNotif('Gemini 模型錯誤，請確認 API Key 支援的模型');
+        setBubbleText('AI 模型不可用','empty');
+        await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'model_not_found',updatedAt:Date.now()});
+        // Stop face detection from re-triggering immediately
+        faceDetectedStart=null;
+        isSubmitting=false;
+        return;
+      }
       await db.ref('infectionSession').update({
         status:'ended',
         spokenText:'訊號暫時中斷，請再試一次。',
@@ -993,7 +1015,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   // Retry up to 3 times on 503 with exponential backoff
   var maxRetries=3;
   for(var attempt=1;attempt<=maxRetries;attempt++){
-    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',{
+    var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},
       body:body

@@ -331,6 +331,7 @@ var currentTurnId=0;
 
 // System states: IDLE | LOOKING | LISTENING | THINKING | TALKING | INTERRUPT
 var systemState='IDLE';
+var faceDetectionFailed=false; // true when camera unavailable, enables click fallback
 
 // Face tracking
 var faceDetectedStart=null;
@@ -377,8 +378,9 @@ function setSystemState(state,hint){
   vtrans.classList.remove('active');
 
   if(state==='IDLE'){
-    orb.textContent='👁';vhint.textContent='自動偵測中';
-    vtrans.textContent=hint||'等待偵測臉部...';
+    orb.textContent='👁';
+    vhint.textContent=faceDetectionFailed?'點擊開始說話':'自動偵測中';
+    vtrans.textContent=hint||(faceDetectionFailed?'點擊眼睛開始說話':'等待偵測臉部...');
     setModelState('idle');
   }else if(state==='LOOKING'){
     orb.className='orb-looking';orb.textContent='👀';
@@ -549,7 +551,7 @@ function initFaceDetection(){
     });
     faceCamera.start().catch(function(e){
       console.warn('Camera start failed:',e);
-      showNotif('無法啟用鏡頭，請檢查瀏覽器權限');
+      enableClickFallback();
     });
   }else{
     // Fallback: getUserMedia directly
@@ -562,7 +564,7 @@ function initFaceDetection(){
       sendFrame();
     }).catch(function(e){
       console.warn('getUserMedia failed:',e);
-      showNotif('無法啟用鏡頭：'+e.message);
+      enableClickFallback();
     });
   }
 }
@@ -664,11 +666,31 @@ function triggerInterrupt(){
 }
 
 function ensureAudioContext(){
-  // Request mic for interrupt detection (separate from speech recognition)
   if(audioContext&&audioContext.state!=='closed')return;
   navigator.mediaDevices.getUserMedia({audio:true,video:false}).then(function(stream){
     initAudioInterruptDetection(stream);
   }).catch(function(e){console.warn('Mic access for interrupt detection failed:',e);});
+}
+
+function enableClickFallback(){
+  // Called when camera fails — orb click starts/stops listening
+  faceDetectionFailed=true;
+  var orb=document.getElementById('state-orb');
+  var hint=document.getElementById('vhint');
+  if(hint)hint.textContent='點擊開始說話';
+  if(orb){
+    orb.style.cursor='pointer';
+    orb.title='點擊開始說話';
+    orb.addEventListener('click',function(){
+      if(!activeChar)return;
+      if(systemState==='IDLE'||systemState==='LOOKING'){
+        startAutoListening('click');
+      }else if(systemState==='LISTENING'){
+        stopListeningAndSubmit('click');
+      }
+    });
+  }
+  showNotif('鏡頭無法啟動\n已切換為點擊模式：點擊眼睛開始說話');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -924,69 +946,90 @@ function handleSessionUpdate(session){
   if(!activeChar||localRoleIdx===null)return;
   if(!session||!session.cycleId)return;
 
+  // New cycle arrived — reset local state
   if(activeCycleId!==session.cycleId){
     activeCycleId=session.cycleId;lastSpokenKey=null;
     localGeneratingKeys={};localPreparingKeys={};
     stopSpeakingAudio();
   }
 
+  var isSpeaker=(localRoleIdx===session.currentSpeaker);
+  var isTarget=(localRoleIdx===session.currentTarget);
+  var step=Number(session.step);
+  var maxSteps=Number(session.maxSteps||10);
+
+  // ── THINKING: only the current speaker generates ──
   if(session.status==='thinking'){
-    if(localRoleIdx===session.currentSpeaker){
-      setBubbleText('思考中','thinking');
-      document.getElementById('vtrans').textContent='思考中...';
-      document.getElementById('vtrans').classList.add('active');
+    if(isSpeaker){
+      setBubbleText('思考中...','thinking');
+      setVtrans('思考中...',true);
+      setSystemState('THINKING','思考中...');
       generateCurrentStep(session);
     }else{
-      setBubbleText('正在聆聽...','empty');
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
+      // Show what we last heard while waiting
+      setBubbleText(session.incomingMessage?'「'+session.incomingMessage+'」':'正在聆聽...','empty');
+      setVtrans('等待中...',false);
     }
     return;
   }
 
+  // ── SPEAKING: speaker plays audio; target pre-generates next reply ──
   if(session.status==='speaking'){
-    if(localRoleIdx===session.currentSpeaker){
+    if(isSpeaker){
+      // Show spoken text and play audio on the speaker device
       setBubbleText(session.spokenText||'（訊號中斷）','speaking');
+      setVtrans('說話中...',true);
       speakSessionText(session);
-    }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
-      setBubbleText('思考中','thinking');
-      document.getElementById('vtrans').textContent='思考中...';
-      document.getElementById('vtrans').classList.add('active');
-      prepareNextResponse(session);
     }else{
-      setBubbleText('正在聆聽...','empty');
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
+      // Every non-speaker sees what is being said
+      setBubbleText('「'+(session.spokenText||'...')+'」','empty');
+      if(isTarget&&step<maxSteps){
+        // Target pre-generates its reply while speaker is still talking
+        setVtrans('準備回應...',true);
+        setSystemState('THINKING','準備回應...');
+        prepareNextResponse(session);
+      }else{
+        setVtrans('正在聆聽...',false);
+      }
     }
     return;
   }
 
+  // ── WAITING_NEXT: prepared response is ready, try to advance ──
   if(session.status==='waiting_next'){
-    if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
-      setBubbleText('思考中','thinking');
-      document.getElementById('vtrans').textContent='思考中...';
-      document.getElementById('vtrans').classList.add('active');
+    if(isTarget&&step<maxSteps){
+      setBubbleText('思考中...','thinking');
+      setVtrans('準備回應...',true);
+      setSystemState('THINKING','準備回應...');
       prepareNextResponse(session);
-      tryAdvanceFromWaiting(session.cycleId,Number(session.step));
+      tryAdvanceFromWaiting(session.cycleId,step);
     }else{
       setBubbleText('正在聆聽...','empty');
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
+      setVtrans('正在聆聽...',false);
     }
     return;
   }
 
+  // ── ENDED ──
   if(session.status==='ended'){
     stopSpeakingAudio();
-    if(localRoleIdx===session.currentSpeaker&&session.spokenText){
+    if(isSpeaker&&session.spokenText){
       setBubbleText(session.spokenText,'speaking');
     }else{
-      setBubbleText('循環結束','empty');
+      setBubbleText('對話循環結束','empty');
     }
+    setVtrans('等待下一輪...',false);
     setSystemState('IDLE','AI 結束回應');
     faceDetectedStart=null;
     return;
   }
+}
+
+// Helper: update vtrans text and active class
+function setVtrans(text,active){
+  var el=document.getElementById('vtrans');if(!el)return;
+  el.textContent=text;
+  el.classList.toggle('active',!!active);
 }
 
 function getOnlineRoleIndices(){
@@ -1043,21 +1086,40 @@ async function generateCurrentStep(session){
 }
 
 async function prepareNextResponse(session){
-  var nextStep=Number(session.step)+1;if(nextStep>Number(session.maxSteps||10))return;
+  var nextStep=Number(session.step)+1;
+  var maxSteps=Number(session.maxSteps||10);
+  if(nextStep>maxSteps)return;
   var key=session.cycleId+'_step_'+nextStep+'_prepare';
   if(localPreparingKeys[key])return;localPreparingKeys[key]=true;
   var prepRef=db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep);
-  var existing=await prepRef.once('value');if(existing.exists())return;
-  var locked=await acquireStepLock(session.cycleId,nextStep,localRoleIdx);if(!locked)return;
+  var existing=await prepRef.once('value');if(existing.exists()){
+    console.log('[prepareNextResponse] step '+nextStep+' already prepared, trying advance');
+    await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
+    return;
+  }
+  var locked=await acquireStepLock(session.cycleId,nextStep,localRoleIdx);
+  if(!locked){console.log('[prepareNextResponse] lock failed for step '+nextStep);return;}
   try{
     if(activeCycleId!==session.cycleId)return;
     var incoming=session.spokenText||session.incomingMessage||'';
+    console.log('[prepareNextResponse] node'+localRoleIdx+' generating step '+nextStep+' from: '+incoming.slice(0,30));
     var result=await generateRoleResponse(localRoleIdx,incoming,session.currentSpeaker,session.cycleId,nextStep);
     if(activeCycleId!==session.cycleId)return;
-    var nextTarget=null;if(nextStep<Number(session.maxSteps||10)){nextTarget=chooseRandomTarget(localRoleIdx);}
-    await prepRef.set({cycleId:session.cycleId,step:nextStep,speaker:localRoleIdx,sourceSpeaker:session.currentSpeaker,incomingMessage:incoming,spokenText:result.spokenText,nextTarget:nextTarget,ready:true,createdAt:Date.now(),createdBy:localDeviceId});
+    // Choose next target (can be null at last step)
+    var nextTarget=null;
+    if(nextStep<maxSteps){nextTarget=chooseRandomTarget(localRoleIdx);}
+    console.log('[prepareNextResponse] node'+localRoleIdx+' prepared step '+nextStep+': '+result.spokenText.slice(0,30));
+    await prepRef.set({
+      cycleId:session.cycleId,step:nextStep,speaker:localRoleIdx,
+      sourceSpeaker:session.currentSpeaker,incomingMessage:incoming,
+      spokenText:result.spokenText,nextTarget:nextTarget,
+      ready:true,createdAt:Date.now(),createdBy:localDeviceId
+    });
     await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
-  }catch(e){console.warn('prepareNextResponse error:',e);}
+  }catch(e){
+    console.warn('[prepareNextResponse] error:',e);
+    localPreparingKeys[key]=false; // allow retry
+  }
 }
 
 async function advanceAfterSpeaking(session){
@@ -1121,20 +1183,31 @@ function speakSessionText(session){
   var key=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
   if(lastSpokenKey===key)return;lastSpokenKey=key;
 
-  var capTurnId=currentTurnId; // capture at speak time
   setSystemState('TALKING','AI 說話中...');
   setBubbleText(session.spokenText||'（訊號中斷）','speaking');
 
+  // Always use the speaking role's voice, not necessarily activeChar
   var role=charsData['node'+session.currentSpeaker]||activeChar;
   var v=(role&&role.voice)||{};
+  var speakerName=(role&&role.name)||'AI';
 
-  elevenSpeak(session.spokenText||'',v.name||'ShanShan',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
-    if(activeCycleId!==session.cycleId)return;
-    setSystemState('IDLE','AI 說完了');
+  console.log('[speakSessionText] step:'+session.step+' speaker:'+session.currentSpeaker+' ('+speakerName+') → '+session.spokenText);
+
+  elevenSpeak(session.spokenText||'',v.name||'',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
+    if(activeCycleId!==session.cycleId){
+      console.log('[speakSessionText] stale cycle, skipping advance');
+      return;
+    }
+    console.log('[speakSessionText] finished speaking step:'+session.step+', advancing...');
     document.getElementById('swave').classList.remove('on');
     setModelState('idle');
-    faceDetectedStart=null; // allow face detection to re-trigger next interaction
-    advanceAfterSpeaking(session);
+    // Advance Firebase first, then reset local state
+    advanceAfterSpeaking(session).then(function(){
+      if(activeCycleId===session.cycleId){
+        // Only reset to IDLE if no new session came in
+        // (handleSessionUpdate will set correct state if next step arrives)
+      }
+    });
   });
 }
 

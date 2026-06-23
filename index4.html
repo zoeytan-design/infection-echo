@@ -506,8 +506,8 @@ var FACE_HOLD_MS=1500;       // face must be present 1.5s before listening start
 var LISTEN_DURATION_MS=8000; // auto-listen for 8 seconds then submit
 
 // ── 打斷設定（可調整）──
-var INTERRUPT_RMS_THRESHOLD=0.08; // 音量門檻，0.08 = 正常說話音量
-var INTERRUPT_HOLD_MS=700;        // 持續說話多久才觸發打斷（毫秒）
+var INTERRUPT_RMS_THRESHOLD=0.03; // 音量超過 0.03 即視為使用者想打斷
+var INTERRUPT_HOLD_MS=200;        // 持續超過 200ms 觸發打斷
 var INTERRUPT_COOLDOWN_MS=1000;   // 打斷後冷卻時間，防止連續觸發
 
 // 打斷狀態

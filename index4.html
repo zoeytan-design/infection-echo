@@ -1151,70 +1151,60 @@ async function tryAdvanceFromWaiting(cycleId,finishedStep){
 function parseSpokenText(raw){
   var txt=String(raw||'').trim();
 
-  function cleanMeta(s){
-    return String(s||'')
-      .trim()
-      .replace(/^```json\s*/i,'')
-      .replace(/^```\s*/,'')
-      .replace(/```$/,'')
-      .replace(/^Here is the JSON:?\s*/i,'')
-      .replace(/^Here is JSON:?\s*/i,'')
-      .replace(/^The JSON is:?\s*/i,'')
-      .replace(/^以下是(?:純)?JSON(?:格式)?[:：]?\s*/i,'')
-      .replace(/^如下[:：]?\s*/i,'')
+  // 從任意位置找第一個完整 {...} 並解析
+  function findAndParseJSON(s){
+    var first=s.indexOf('{');
+    var last=s.lastIndexOf('}');
+    if(first<0||last<=first)return null;
+    try{
+      var obj=JSON.parse(s.slice(first,last+1));
+      var val=obj.spokenText||obj.visibleText||obj.text||obj.reply||obj.content||'';
+      return val?String(val).trim():null;
+    }catch(e){return null;}
+  }
+
+  // 清除所有 meta 前綴（任意 "Here is..." 變體）
+  function stripMeta(s){
+    return s
+      .replace(/^```json\s*/im,'')
+      .replace(/^```\s*/im,'')
+      .replace(/```/g,'')
+      .replace(/^Here\s+is\s+(?:the\s+)?JSON[^\n]*[:\n]*/im,'')
+      .replace(/^The\s+JSON[^\n]*[:\n]*/im,'')
+      .replace(/^以下是[^\n]*[：:\n]*/im,'')
+      .replace(/^如下[^\n]*[：:\n]*/im,'')
       .trim();
   }
 
-  function extractSpoken(value){
-    if(!value)return '';
-    if(typeof value==='object'){
-      return value.spokenText||value.visibleText||value.text||value.reply||value.content||'';
-    }
-    if(typeof value==='string'){
-      var s=cleanMeta(value);
-      if((s.startsWith('{')&&s.endsWith('}'))||(s.startsWith('"')&&s.endsWith('"'))){
-        try{return extractSpoken(JSON.parse(s));}catch(e){}
-      }
-      return s;
-    }
-    return '';
+  // 1. 先從原始 raw 找 JSON（最可靠）
+  var fromRaw=findAndParseJSON(txt);
+  if(fromRaw)return {spokenText:clampText(fromRaw,120)};
+
+  // 2. 清掉 meta 再找 JSON
+  var cleaned=stripMeta(txt);
+  var fromCleaned=findAndParseJSON(cleaned);
+  if(fromCleaned)return {spokenText:clampText(fromCleaned,120)};
+
+  // 3. 逐行找 JSON
+  var lines=txt.split('\n');
+  for(var i=0;i<lines.length;i++){
+    var fromLine=findAndParseJSON(lines[i]);
+    if(fromLine)return {spokenText:clampText(fromLine,120)};
   }
 
-  txt=cleanMeta(txt);
-
-  // 1. 直接 parse 整段
-  try{
-    var direct=JSON.parse(txt);
-    var spoken=extractSpoken(direct);
-    if(spoken)return {spokenText:clampText(spoken,120)};
-  }catch(e){}
-
-  // 2. 從中間抓 {...}
-  var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
-  if(first>=0&&last>first){
-    try{
-      var obj=JSON.parse(txt.slice(first,last+1));
-      var spoken2=extractSpoken(obj);
-      if(spoken2)return {spokenText:clampText(spoken2,120)};
-    }catch(e){}
-  }
-
-  // 3. fallback：清掉 meta，取第一行有意義的文字
-  txt=cleanMeta(txt).replace(/```/g,'').trim();
-  var lines=txt.split('\n')
+  // 4. 最後 fallback：取第一行非 meta 的文字
+  var goodLines=cleaned.split('\n')
     .map(function(l){return l.trim();})
     .filter(function(l){
-      return l&&
-        !/^Here is/i.test(l)&&
+      return l&&l.length>1&&
+        !/^Here\s+is/i.test(l)&&
         !/^The JSON/i.test(l)&&
-        !/^JSON[:：]?$/i.test(l)&&
         !/^以下是/.test(l)&&
         !/^如下/.test(l)&&
-        !/^\{/.test(l)&&
-        !/^\}/.test(l);
+        !/^[{}"\[\]]/.test(l)&&
+        !/^spokenText/i.test(l);
     });
-  var fallback=lines[0]||'我聽到了，但這句話好像被傳歪了一點。';
-  return {spokenText:clampText(fallback,120)};
+  return {spokenText:clampText(goodLines[0]||'我聽到了，但這句話好像被傳歪了一點。',120)};
 }
 
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step){
@@ -1246,8 +1236,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
     contents:[{role:'user',parts:[{text:sys+'\n\n'+user}]}],
     generationConfig:{
       temperature:0.82,
-      maxOutputTokens:200,
-      responseMimeType:'application/json'
+      maxOutputTokens:300
     }
   });
 

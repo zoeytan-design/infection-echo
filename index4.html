@@ -1141,18 +1141,30 @@ async function tryAdvanceFromWaiting(cycleId,finishedStep){
 
 function parseSpokenText(raw){
   var txt=String(raw||'').trim();
+  // Strip markdown code blocks
   txt=txt.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```$/,'').trim();
 
+  // Try to find and parse JSON object
   var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
   if(first>=0&&last>first){
     try{
       var obj=JSON.parse(txt.slice(first,last+1));
-      return {spokenText:clampText(obj.spokenText||obj.visibleText||obj.text||obj.reply||txt,120)};
+      var spoken=obj.spokenText||obj.visibleText||obj.text||obj.reply||obj.content||'';
+      if(spoken)return {spokenText:clampText(spoken,120)};
     }catch(e){}
   }
 
+  // Filter out meta phrases like "Here is the JSON", "以下是", etc.
+  var metaPhrases=['Here is the JSON','here is the json','以下是','如下','JSON格式','json:','JSON:'];
+  var isMetaOnly=metaPhrases.some(function(p){return txt.toLowerCase().indexOf(p.toLowerCase())>=0&&txt.length<60;});
+  if(isMetaOnly)return {spokenText:'我需要重新整理一下思緒。'};
+
+  // Last resort: use first sentence
   txt=txt.replace(/⟳ 感染紀錄：/g,'\n感染紀錄：');
-  return {spokenText:clampText((txt.split('\n')[0]||txt),120)};
+  var firstLine=(txt.split('\n')[0]||txt).trim();
+  // If it looks like a JSON key/value pair, skip it
+  if(firstLine.startsWith('"')||firstLine.startsWith('{'))return {spokenText:'我需要重新整理一下思緒。'};
+  return {spokenText:clampText(firstLine,120)};
 }
 
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step){
@@ -1162,7 +1174,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var sourceName=(sourceRoleIdx==='user')?'使用者':((charsData['node'+sourceRoleIdx]&&charsData['node'+sourceRoleIdx].name)||('節點 '+(Number(sourceRoleIdx)+1)));
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
 
-  var sys='你是「'+role.name+'」。個性：'+role.persona+'\n標籤：'+(role.traits||[]).join('、')+'\n扭曲：'+(role.distort||3)+'/5。\n來自：'+sourceName+'。\n用你的角色語氣回應，繁體中文，1句話，只輸出JSON：{"spokenText":"台詞"}';
+  var sys='你是「'+role.name+'」。個性：'+role.persona+'\n標籤：'+(role.traits||[]).join('、')+'\n扭曲：'+(role.distort||3)+'/5。\n來自：'+sourceName+'。\n\n【重要】只能輸出純 JSON，格式必須是：{"spokenText":"台詞"}\n不可以有任何其他文字、說明、markdown、換行。\n用繁體中文，1句話，符合角色個性。';
   var user='你剛剛聽到的內容：'+incomingMessage;
 
   var body=JSON.stringify({

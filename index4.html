@@ -461,10 +461,9 @@ function stopListeningAndSubmit(triggerSource){
 function submitUserTranscript(transcript){
   if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
   if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!geminiKey||!geminiKey.startsWith('AIza')){
+  if(!geminiKey||geminiKey.length<20){
     showNotif('Gemini Key 無效，請重新輸入');
     setSystemState('IDLE');
-    // Clear stored bad key and show key overlay
     sk('ie_gk','');geminiKey='';
     document.getElementById('key-overlay').classList.remove('hidden');
     return;
@@ -739,7 +738,7 @@ function toggleTrait(idx,btn){
 function submitKeys(){
   var g=document.getElementById('ki-gemini').value.trim();
   var el=document.getElementById('ki-eleven').value.trim();
-  if(!g.startsWith('AIza')){document.getElementById('key-err').textContent='Gemini Key 格式不正確';return;}
+  if(g.length<20){document.getElementById('key-err').textContent='Gemini Key 太短，請確認後再輸入';return;}
   if(!el.startsWith('sk_')){document.getElementById('key-err').textContent='ElevenLabs Key 格式不正確';return;}
   geminiKey=g;elevenKey=el;sk('ie_gk',g);sk('ie_ek',el);
   document.getElementById('key-overlay').classList.add('hidden');
@@ -1108,7 +1107,7 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
   var sys='你是「'+role.name+'」。你的個性：'+role.persona+'\n性格標籤：'+(role.traits||[]).join('、')+'\n扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n\n你正在參與一個三個 AI 角色互相傳話的系統。上一個訊息來自：'+sourceName+'。你聽到的內容就是上一個角色說出口的話，或使用者剛剛說的話。\n\n你必須根據自己的性格、偏見、情緒與扭曲強度，把這段話重新理解後，用你的角色語氣說出來。\n\n規則：\n- 只使用繁體中文\n- 像正在和另一個角色對話\n- 口語化、自然、有角色感\n- 不要解釋設定\n- 不要輸出思考過程\n- 不要輸出英文\n- 不要輸出條列\n- 不要太長，1-2句即可\n- 只輸出合法 JSON，不要 markdown\n- JSON 格式必須是：{"spokenText":"你的台詞"}';
   var user='你剛剛聽到的內容：'+incomingMessage;
-  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+geminiKey,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.82,response_mime_type:'application/json'}})});
+  var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':geminiKey},body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:0.82,response_mime_type:'application/json'}})});
   var data=await resp.json();
   if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
   var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';

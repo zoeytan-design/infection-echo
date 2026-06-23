@@ -728,24 +728,63 @@ document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e
 document.getElementById('ki-gemini').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
 
 // ── FIREBASE ──
-function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
+function waitForFirebase(){
+  console.log('[Firebase] waiting for SDK...');
+  if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);
+}
 function initFb(){
-  try{if(firebase.apps.length)firebase.app().delete().then(startFb);else startFb();}
-  catch(e){document.getElementById('fb-status').textContent='失敗:'+e.message;}
+  console.log('[Firebase] initFb called, apps:',firebase.apps.length);
+  try{
+    if(firebase.apps.length){firebase.app().delete().then(startFb).catch(startFb);}
+    else{startFb();}
+  }catch(e){
+    console.error('[Firebase] initFb error:',e);
+    document.getElementById('fb-status').textContent='失敗:'+e.message;
+    document.getElementById('fb-status').className='fb-status err';
+  }
 }
 function startFb(){
-  firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
-  db=firebase.database();
-  db.ref('.info/connected').on('value',function(snap){
-    if(snap.val()){
-      var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
-      document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
-      db.ref('chars').on('value',function(s){charsData=s.val()||{};renderRoleList(charsData);preloadPublishedVoices(charsData);});
-      listenToPresence();
-      listenToInfectionSession();
-      showScreen('screen-select');
-    }
-  });
+  console.log('[Firebase] startFb called');
+  try{
+    firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
+    db=firebase.database();
+    console.log('[Firebase] database created, listening to .info/connected');
+
+    // Timeout fallback: if Firebase doesn't connect in 8s, show error
+    var fbTimeout=setTimeout(function(){
+      console.warn('[Firebase] connection timeout after 8s');
+      var el=document.getElementById('fb-status');
+      if(el.className.indexOf('ok')<0){
+        el.textContent='⚠ 連線逾時 — 請確認網路或 Firebase 設定';
+        el.className='fb-status err';
+        // Still show the select screen so user can at least reach setup
+        showScreen('screen-select');
+        renderRoleList({});
+      }
+    },8000);
+
+    db.ref('.info/connected').on('value',function(snap){
+      console.log('[Firebase] .info/connected =',snap.val());
+      if(snap.val()){
+        clearTimeout(fbTimeout);
+        var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
+        document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
+        db.ref('chars').on('value',function(s){
+          charsData=s.val()||{};
+          console.log('[Firebase] chars updated:',Object.keys(charsData));
+          renderRoleList(charsData);
+          preloadPublishedVoices(charsData);
+        });
+        listenToPresence();
+        listenToInfectionSession();
+        showScreen('screen-select');
+      }
+    });
+  }catch(e){
+    console.error('[Firebase] startFb error:',e);
+    document.getElementById('fb-status').textContent='啟動失敗:'+e.message;
+    document.getElementById('fb-status').className='fb-status err';
+  }
 }
 function listenToPresence(){
   if(presenceListenerStarted||!db)return;presenceListenerStarted=true;
@@ -785,13 +824,18 @@ function saveChar(i){
 // ── ROLE LIST ──
 function renderRoleList(data){
   var list=document.getElementById('role-list');list.innerHTML='';
-  for(var i=0;i<3;i++){(function(idx){
+  var hasAny=false;for(var i=0;i<3;i++){if(data['node'+i])hasAny=true;}
+  if(!hasAny){
+    list.innerHTML='<div style="text-align:center;padding:20px 0;"><div style="font-size:13px;color:#44445a;margin-bottom:12px;">尚未發布任何角色節點</div><button onclick="showScreen("screen-setup")" style="background:rgba(155,109,255,0.15);border:0.5px solid rgba(155,109,255,0.4);border-radius:8px;color:#c4a0f0;cursor:pointer;font-family:var(--mono);font-size:12px;padding:10px 20px;">⚙ 前往系統設定發布角色</button></div>';
+    return;
+  }
+  for(var j=0;j<3;j++){(function(idx){
     var c=data['node'+idx];var card=document.createElement('div');
     card.className='rc'+(c?'':' unavail');
     card.innerHTML='<div class="rav '+RC[idx]+'">'+(c?esc(c.emoji):'?')+'</div><div class="rt"><div class="rn">'+esc(c?c.name:'節點'+(idx+1))+'</div><div class="rtr">'+esc(c?c.traits.join(' · '):'等待發布...')+'</div></div>'+(c?'<div class="ra">→</div>':'');
     if(c)card.onclick=function(){enterRole(idx,c);};
     list.appendChild(card);
-  })(i);}
+  })(j);}
 }
 
 // ── ENTER ROLE ──

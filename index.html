@@ -684,7 +684,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     // 要讓嘴巴在世界空間看起來是 0.3 單位，
     // 就必須在 local space 用 0.3 / normalizedScale 來補償
     var nScale=root.userData.normalizedScale||1;
-    var mouthWorldSize=0.06; // 目標世界大小（可調整）
+    var mouthWorldSize=0.012; // 縮小 80%（原 0.06）
     var localSize=mouthWorldSize/nScale;
 
     var geo=new THREE.SphereGeometry(localSize,16,16);
@@ -729,8 +729,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var mouth=activeRoot.userData.mouth;
 
     if(currentState==='speaking'){
-      // PDF: mouth.scale.y = 1 + Math.abs(Math.sin(Date.now() * 0.02)) * 1.5
-      mouth.scale.y=1+Math.abs(Math.sin(Date.now()*0.02))*1.5;
+      // 速度放慢 3 倍：0.02 → 0.0067
+      mouth.scale.y=1+Math.abs(Math.sin(Date.now()*0.0067))*1.5;
     }else{
       mouth.scale.y=0.3;
     }

@@ -320,14 +320,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     },
     2:{
       idle:'assets/middle_Idle.glb',
-      listening:'assets/middle_Listening_L.glb',
-      thinking:'assets/middle_Listening_M.glb',
+      // Node 3 / middle 的聆聽狀態拆成三種：
+      // 使用者說話 = middle_Listening_M.glb
+      // 節點 1 說話 = middle_Listening_R.glb
+      // 節點 2 說話 = middle_Listening_L.glb
+      listening:'assets/middle_Listening_M.glb',
+      listeningUser:'assets/middle_Listening_M.glb',
+      listeningNode1:'assets/middle_Listening_R.glb',
+      listeningNode2:'assets/middle_Listening_L.glb',
+      thinking:'assets/middle_Thinking.glb',
       speaking:'assets/middle_Idle.glb',
       rotationY:Math.PI,
       offsetY:-0.35
     }
   };
-  var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
+  var STATE_TO_MODEL={
+    idle:'idle',
+    listening:'listening',
+    listening_user:'listeningUser',
+    listening_node_1:'listeningNode1',
+    listening_node_2:'listeningNode2',
+    thinking:'thinking',
+    speaking:'idle'
+  };
 
   // 2.45 × 1.3 = 3.185：所有 GLB 統一放大 30%
   var MODEL_NORMALIZED_SIZE=3.185;
@@ -609,12 +624,36 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     tryNext();
   }
 
+  function getModelStateNamesForRole(idx){
+    var cfg=MODEL_CONFIGS[idx]||{};
+    var names=[];
+    Object.keys(cfg).forEach(function(k){
+      if(typeof cfg[k]==='string'&&/\.glb$/i.test(cfg[k]))names.push(k);
+    });
+    return names;
+  }
+
+  function resolveModelState(state){
+    var cfg=MODEL_CONFIGS[roleIndex]||{};
+    var mapped=STATE_TO_MODEL[state]||state||'idle';
+
+    // If a role has a special model for this state, use it.
+    if(cfg[mapped])return mapped;
+
+    // Node 1 / Node 2 do not need separate listening directions,
+    // so listening_user / listening_node_1 / listening_node_2 safely fall back here.
+    if(String(state||'').indexOf('listening')===0&&cfg.listening)return 'listening';
+
+    if(cfg.idle)return 'idle';
+    return mapped;
+  }
+
   function loadRoleModels(idx){
     var cfg=MODEL_CONFIGS[idx];
     if(!cfg)return;
-    loadModel(idx,'idle',cfg.idle);
-    loadModel(idx,'listening',cfg.listening);
-    loadModel(idx,'thinking',cfg.thinking);
+    getModelStateNamesForRole(idx).forEach(function(stateName){
+      loadModel(idx,stateName,cfg[stateName]);
+    });
   }
 
   function applyState(state,fromLoader){
@@ -624,7 +663,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       clearModelStatus();
       return;
     }
-    var modelState=STATE_TO_MODEL[currentState]||'idle';
+    var modelState=resolveModelState(currentState);
     var activeKey=roleKey(roleIndex,modelState);
     var data=modelCache[activeKey];
 
@@ -953,6 +992,16 @@ function set3DState(state){
   pending3DState=state||'idle';
   if(window.IE3D&&typeof window.IE3D.setState==='function')window.IE3D.setState(pending3DState);
 }
+function getListening3DState(sourceSpeaker){
+  if(sourceSpeaker==='user'||sourceSpeaker===null||sourceSpeaker===undefined)return 'listening_user';
+  var sourceIdx=Number(sourceSpeaker);
+  if(sourceIdx===0)return 'listening_node_1';
+  if(sourceIdx===1)return 'listening_node_2';
+  return 'listening';
+}
+function set3DListeningFrom(sourceSpeaker){
+  set3DState(getListening3DState(sourceSpeaker));
+}
 function destroy3DLayer(){
   if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
   pending3DState='idle';
@@ -1211,7 +1260,7 @@ function startRecAuto(){
   document.getElementById('vhint').textContent='自動聆聽中';
   document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
   document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
-  set3DState('listening');
+  set3DListeningFrom('user');
   try{recognition.start();}catch(e){console.warn('recognition start:',e);}
 
   // Auto-submit after LISTEN_DURATION_MS
@@ -1245,7 +1294,7 @@ function startRec(){
   document.getElementById('vhint').textContent='放開發送';
   document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
   document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
-  set3DState('listening');
+  set3DListeningFrom('user');
   try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
 }
 function stopRec(skipSend){
@@ -1340,6 +1389,7 @@ function handleSessionUpdate(session){
       generateCurrentStep(session);
     }else{
       setBubbleText('正在聆聽...','empty');
+      set3DListeningFrom(session.sourceSpeaker);
       document.getElementById('vtrans').textContent='正在聆聽...';
       document.getElementById('vtrans').classList.remove('active');
     }
@@ -1353,13 +1403,16 @@ function handleSessionUpdate(session){
       speakSessionText(session);
     }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
       setBubbleText('思考中','thinking');
-      set3DState('thinking');
+      // 目前角色正在聽上一個節點說話，同時預先準備下一句。
+      // Node 3 會依 currentSpeaker 切到 middle_Listening_R / L。
+      set3DListeningFrom(session.currentSpeaker);
       document.getElementById('vtrans').textContent='思考中...';
       document.getElementById('vtrans').classList.add('active');
       // 速度優化：目前角色一開始說話，下一個角色就立刻用 spokenText 思考。
       prepareNextResponse(session);
     }else{
       setBubbleText('正在聆聽...','empty');
+      set3DListeningFrom(session.currentSpeaker);
       document.getElementById('vtrans').textContent='正在聆聽...';
       document.getElementById('vtrans').classList.remove('active');
     }
@@ -1376,6 +1429,7 @@ function handleSessionUpdate(session){
       tryAdvanceFromWaiting(session.cycleId,Number(session.step));
     }else{
       setBubbleText('正在聆聽...','empty');
+      set3DListeningFrom(session.sourceSpeaker);
       document.getElementById('vtrans').textContent='正在聆聽...';
       document.getElementById('vtrans').classList.remove('active');
     }

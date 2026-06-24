@@ -303,6 +303,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
   // The GLB is authored facing away from the camera in this layout, so rotate it 180° to face forward.
   var MODEL_BASE_ROTATION_Y=Math.PI;
+  // Display tuning: 50% larger than previous 2.35 sizing, and lifted upward on screen.
+  var MODEL_NORMALIZED_SIZE=3.55;
+  var MODEL_BASE_Y=0.42;
 
   function getContainer(){return document.getElementById('three-layer');}
   function ensureScene(){
@@ -356,9 +359,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     box.getCenter(center);
     root.position.sub(center);
     var maxDim=Math.max(size.x,size.y,size.z)||1;
-    var scale=2.35/maxDim;
+    var scale=MODEL_NORMALIZED_SIZE/maxDim;
     root.scale.setScalar(scale);
-    root.position.y-=0.15;
+    root.position.y=MODEL_BASE_Y;
     root.traverse(function(obj){
       if(obj.isMesh){
         obj.frustumCulled=false;
@@ -416,7 +419,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     if(visibleModel){
       var t=performance.now()*0.001;
       visibleModel.rotation.y=MODEL_BASE_ROTATION_Y+Math.sin(t*0.35)*0.04;
-      visibleModel.position.y=-0.15+Math.sin(t*1.1)*0.025;
+      visibleModel.position.y=MODEL_BASE_Y+Math.sin(t*1.1)*0.025;
     }
     renderer.render(scene,camera);
   }

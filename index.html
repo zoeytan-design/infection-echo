@@ -331,7 +331,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       thinking:'assets/middle_Thinking.glb',
       speaking:'assets/middle_Idle.glb',
       // middle 模型原本用 Math.PI 會背對畫面；改成 0 讓節點 3 正面朝向鏡頭
-      rotationY:0,
+      // Node 3 middle 模型的匯出方向與 Girl/Boy 相反；畫面若看到背面，需轉 180 度
+      rotationY:Math.PI,
       offsetY:-0.35
     }
   };

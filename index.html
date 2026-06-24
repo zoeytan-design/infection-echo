@@ -297,16 +297,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   var initialized=false,roleIndex=null,currentState='idle';
   var modelCache={},mixers={},activeRoot=null,loadingKeys={};
 
-  // Node 1 uses Girl models, Node 2 uses Boy models, Node 3 uses middle models.
-  // GitHub Pages is case-sensitive, so the loader below will try several safe path variants.
   var MODEL_CONFIGS={
     0:{
       idle:'assets/Girl_Idle.glb',
       listening:'assets/Girl_Listening_L.glb',
       thinking:'assets/Girl_Thinking.glb',
       speaking:'assets/Girl_Idle.glb',
-      // 所有節點都改用外層 facingAnchor 控制朝向。
-      // 如果節點 1 還是背面，只需要把這裡改成 0 或 -Math.PI。
       facingY:Math.PI,
       offsetX:0,
       offsetY:-0.35,
@@ -317,7 +313,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       listening:'assets/Boy_Listening_R.glb',
       thinking:'assets/Boy_Thinking.glb',
       speaking:'assets/Boy_Idle.glb',
-      // 如果節點 2 還是背面，只需要把這裡改成 0 或 -Math.PI。
       facingY:Math.PI,
       offsetX:0,
       offsetY:-0.35,
@@ -325,31 +320,16 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     },
     2:{
       idle:'assets/middle_Idle.glb',
-      // 節點 3 / middle 的聆聽狀態拆成三種：
-      // 使用者說話 = middle_Listening_M.glb
-      // 節點 1 說話 = middle_Listening_R.glb
-      // 節點 2 說話 = middle_Listening_L.glb
       listening:'assets/middle_Listening_M.glb',
       listeningUser:'assets/middle_Listening_M.glb',
       listeningNode1:'assets/middle_Listening_R.glb',
       listeningNode2:'assets/middle_Listening_L.glb',
       thinking:'assets/middle_Thinking.glb',
       speaking:'assets/middle_Idle.glb',
-      // 節點 3 也使用同一套 facingAnchor。若仍背面，優先只改這個值。
-      facingY:Math.PI,
+      facingY:0,        // ← 修改：原本是 Math.PI，改為 0 修正節點3背對鏡頭的問題
       offsetX:0,
       offsetY:-0.35,
       offsetZ:0
-      /*
-      如果未來發現某一個動作檔方向不同，可以取消下面這段註解做單獨修正：
-      stateFacingY:{
-        idle:Math.PI,
-        listeningUser:Math.PI,
-        listeningNode1:Math.PI,
-        listeningNode2:Math.PI,
-        thinking:Math.PI
-      }
-      */
     }
   };
   var STATE_TO_MODEL={
@@ -362,11 +342,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     speaking:'idle'
   };
 
-  // 2.45 × 1.3 = 3.185：所有 GLB 統一放大 30%
   var MODEL_NORMALIZED_SIZE=3.185;
   var MODEL_BASE_Y=0.0;
   var MODEL_EXTRA_OFFSET_Y=-0.30;
-  // 鎖定 GLB root transform，避免節點 2 因 root animation 或每幀浮動造成位置飄移
   var LOCK_MODEL_ROOT_MOTION=true;
 
   function getContainer(){return document.getElementById('three-layer');}
@@ -441,7 +419,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var noExt=file.replace(/\.glb$/i,'');
     var names=[file];
 
-    // Common mistakes when uploading to GitHub / exporting from Blender.
     names.push(noExt+'.GLB');
     names.push(file.toLowerCase());
     names.push(noExt.toLowerCase()+'.glb');
@@ -518,15 +495,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var modelState=state||'idle';
     if(cfg.stateFacingY&&cfg.stateFacingY[modelState]!==undefined)return cfg.stateFacingY[modelState];
     if(cfg.facingY!==undefined)return cfg.facingY;
-    // 兼容舊版設定名稱
     if(cfg.rotationY!==undefined)return cfg.rotationY;
     return Math.PI;
   }
 
   function normalizeModel(root,idx,state){
-    // root 只負責「整體位置 / 大小 / 置中」；
-    // facingAnchor 才負責「模型面向」。
-    // 這樣 GLB 內部 armature / root animation 不會把外層方向抵消。
     var cfg=MODEL_CONFIGS[idx]||{};
     var facingY=getFacingY(idx,state);
     var facingAnchor=root.userData.facingAnchor||null;
@@ -614,18 +587,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var assetRoot=gltf.scene;
     assetRoot.name='IE3D_asset_'+key;
 
-    // 保留 GLB 本身的初始 transform，動畫更新後會鎖回來，避免 root motion 漂移。
     assetRoot.userData.basePosition=assetRoot.position.clone();
     assetRoot.userData.baseQuaternion=assetRoot.quaternion.clone();
     assetRoot.userData.baseScale=assetRoot.scale.clone();
 
-    // facingAnchor：唯一負責模型正面方向的外層。
-    // 節點 1、2、3 全部都用同一種結構，不再直接旋轉 gltf.scene。
     var facingAnchor=new THREE.Group();
     facingAnchor.name='IE3D_facingAnchor_'+key;
     facingAnchor.add(assetRoot);
 
-    // root：唯一負責整體位置、大小、置中。
     var root=new THREE.Group();
     root.name='IE3D_root_'+key;
     root.add(facingAnchor);
@@ -653,8 +622,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     };
 
     if(gltf.animations&&gltf.animations.length){
-      // 動畫掛在真正的 GLB assetRoot 上，不掛在外層 root / facingAnchor。
-      // 這樣外層可以穩定控制方向、位置與大小。
       var mixer=new THREE.AnimationMixer(root.userData.assetRoot);
       gltf.animations.forEach(function(clip){
         var action=mixer.clipAction(clip);
@@ -714,11 +681,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var cfg=MODEL_CONFIGS[roleIndex]||{};
     var mapped=STATE_TO_MODEL[state]||state||'idle';
 
-    // If a role has a special model for this state, use it.
     if(cfg[mapped])return mapped;
 
-    // Node 1 / Node 2 do not need separate listening directions,
-    // so listening_user / listening_node_1 / listening_node_2 safely fall back here.
     if(String(state||'').indexOf('listening')===0&&cfg.listening)return 'listening';
 
     if(cfg.idle)return 'idle';
@@ -744,8 +708,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var activeKey=roleKey(roleIndex,modelState);
     var data=modelCache[activeKey];
 
-    // Only one GLB root may exist in the scene at any time.
-    // This prevents Node 1 idle/listening overlap and prevents Node 2 from showing a stale Girl model.
     Object.keys(modelCache).forEach(function(k){
       var r=modelCache[k]&&modelCache[k].root;
       if(r&&r.parent)r.parent.remove(r);
@@ -775,7 +737,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       var mixer=mixers[k];
       mixer.update(dt);
 
-      // 如果 GLB 動畫本身有 root motion，鎖住 assetRoot，避免模型邊播動畫邊漂移。
       var data=modelCache[k];
       var assetRoot=data&&data.assetRoot;
       if(assetRoot&&assetRoot.userData&&assetRoot.userData.basePosition){
@@ -786,7 +747,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     });
 
     if(activeRoot&&LOCK_MODEL_ROOT_MOTION){
-      // root 永遠只維持 normalize 後的位置與大小。
       if(activeRoot.userData.basePosition)activeRoot.position.copy(activeRoot.userData.basePosition);
       if(activeRoot.userData.baseRotation)activeRoot.rotation.copy(activeRoot.userData.baseRotation);
       if(activeRoot.userData.baseScale)activeRoot.scale.copy(activeRoot.userData.baseScale);
@@ -840,19 +800,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 <script>
 console.log('[Infection Echo] OpenAI build loaded: no Gemini endpoint');
-// ── CONFIG ──
-// OpenAI model — change here if needed
-// 建議先用 gpt-4.1-mini 測試，成本較低、速度較快
 var OPENAI_MODEL='gpt-4.1-mini';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
-// 背景圖檔名（放在 assets/ 資料夾內）
 var CHAT_BG_FILES=['bg.jpg','bg.jpg','bg.jpg'];
 
-// ── STATE ──
 var db=null,openaiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,charsData={};
 var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
@@ -871,7 +826,6 @@ var sessionListenerStarted=false;
 var presenceListenerStarted=false;
 var modelState='idle';
 
-// ── UTILS ──
 function gk(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function sk(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
@@ -897,7 +851,6 @@ function showNotif(msg){
   },3000);
 }
 
-// ── SCREENS ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});}
 function goBack(){
   stopSpeaking();destroy3DLayer();if(isRec)stopRec(true);
@@ -906,7 +859,6 @@ function goBack(){
   renderRoleList(charsData);showScreen('screen-select');
 }
 
-// ── SETUP ──
 function switchTab(i){
   for(var j=0;j<3;j++){
     document.querySelector('.ctab:nth-child('+(j+1)+')').classList.toggle('on',j===i);
@@ -925,7 +877,6 @@ function toggleTrait(idx,btn){
   if(p>=0)selTraits[idx].splice(p,1);else selTraits[idx].push(t);
 }
 
-// ── KEYS ──
 function submitKeys(){
   var o=document.getElementById('ki-openai').value.trim();
   var el=document.getElementById('ki-eleven').value.trim();
@@ -938,7 +889,6 @@ function submitKeys(){
 document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
 document.getElementById('ki-openai').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
 
-// ── FIREBASE ──
 function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
 function initFb(){
   try{if(firebase.apps.length)firebase.app().delete().then(startFb);else startFb();}
@@ -976,7 +926,6 @@ function listenToInfectionSession(){
   db.ref('infectionSession').on('value',function(snap){handleSessionUpdate(snap.val());});
 }
 
-// ── SAVE CHAR ──
 function saveChar(i){
   if(!db){alert('請先連線');return;}
   var data={
@@ -998,7 +947,6 @@ function saveChar(i){
   }).catch(function(e){showNotif('儲存失敗:'+e.message);});
 }
 
-// ── ROLE LIST ──
 function renderRoleList(data){
   var list=document.getElementById('role-list');list.innerHTML='';
   for(var i=0;i<3;i++){(function(idx){
@@ -1010,7 +958,6 @@ function renderRoleList(data){
   })(i);}
 }
 
-// ── ENTER ROLE ──
 function enterRole(idx,charData){
   activeNodeIdx=idx;localRoleIdx=idx;activeChar=charData;recognition=null;
   lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
@@ -1027,7 +974,6 @@ function enterRole(idx,charData){
   }
 }
 
-// ── CHAT BACKGROUND ──
 function uniqueList(arr){var out=[];arr.forEach(function(v){if(v&&out.indexOf(v)===-1)out.push(v);});return out;}
 function setChatBackground(idx){
   var sceneEl=document.getElementById('chat-scene'),bgImg=document.getElementById('chat-bg-img');if(!sceneEl||!bgImg)return;
@@ -1050,7 +996,6 @@ function setChatBackground(idx){
   tryNext();
 }
 
-// ── BUBBLE TEXT ──
 function setBubbleText(text,state){
   var el=document.getElementById('ai-bubble-text');if(!el)return;
   el.classList.remove('empty','thinking','speaking');if(state)el.classList.add(state);el.textContent=text||'';
@@ -1101,26 +1046,19 @@ function destroy3DLayer(){
   if(window.IE3D&&typeof window.IE3D.destroy==='function')window.IE3D.destroy();
 }
 
-// ── VOICE BUTTON ──
 var vbtn=document.getElementById('vbtn');
-// Button kept for visual feedback only — pointer events disabled
-// Input is now triggered by face detection automatically
 
-// ── FACE DETECTION STATE ──
 var faceDetectedStart=null;
 var faceListenTimer=null;
 var faceDetector=null;
-var FACE_HOLD_MS=1500;       // face must be present 1.5s before listening starts
-var LISTEN_DURATION_MS=8000; // auto-listen for 8 seconds then submit
+var FACE_HOLD_MS=1500;
+var LISTEN_DURATION_MS=8000;
 
-// ── 打斷設定（可調整）──
-// 新邏輯：只有在 AI 說話中，且「這台裝置最近偵測到雙眼可見」＋「麥克風音量超過門檻」才會觸發打斷。
-var INTERRUPT_RMS_THRESHOLD=0.02; // 音量超過 0.02 才視為使用者想打斷
-var INTERRUPT_HOLD_MS=200;        // 持續超過 200ms 觸發打斷
-var INTERRUPT_COOLDOWN_MS=1000;   // 打斷後冷卻時間，防止連續觸發
-var INTERRUPT_EYE_VALID_MS=500;   // 最近 500ms 內必須偵測到雙眼可見，才允許打斷
+var INTERRUPT_RMS_THRESHOLD=0.02;
+var INTERRUPT_HOLD_MS=200;
+var INTERRUPT_COOLDOWN_MS=1000;
+var INTERRUPT_EYE_VALID_MS=500;
 
-// 打斷狀態
 var interruptAudioCtx=null;
 var interruptAnalyser=null;
 var interruptMicStream=null;
@@ -1130,9 +1068,8 @@ var lastInterruptTime=0;
 var interruptEyesVisible=false;
 var lastInterruptEyesAt=0;
 
-// ── 打斷功能（麥克風音量偵測）──
 function initInterruptDetection(){
-  if(interruptAudioCtx)return; // already init
+  if(interruptAudioCtx)return;
   navigator.mediaDevices.getUserMedia({audio:true,video:false})
   .then(function(stream){
     interruptMicStream=stream;
@@ -1153,13 +1090,9 @@ function startInterruptLoop(){
   var buf=new Float32Array(interruptAnalyser.fftSize);
   function loop(){
     interruptRaf=requestAnimationFrame(loop);
-    // 只在 AI 說話時偵測打斷
     if(modelState!=='speaking'){voiceStartTime=null;return;}
-    // 冷卻中不偵測
     if(Date.now()-lastInterruptTime<INTERRUPT_COOLDOWN_MS){return;}
 
-    // 只有這台裝置最近有偵測到正面雙眼，才允許音量打斷。
-    // 這可以降低三台裝置彼此麥克風太近造成的誤觸發。
     var eyesFresh=interruptEyesVisible&&(Date.now()-lastInterruptEyesAt<INTERRUPT_EYE_VALID_MS);
     if(!eyesFresh){voiceStartTime=null;return;}
 
@@ -1188,12 +1121,9 @@ function triggerInterrupt(){
   isSubmitting=false;
   faceDetectedStart=null;
   setBubbleText('已打斷，重新聆聽中...','empty');
-  // Do not switch to Girl_Listening_L during the interrupt transition.
-  // The listening model should appear only when startRecAuto()/startRec() actually begins recording.
   set3DState('idle');
   document.getElementById('vtrans').textContent='打斷 — 重新說話';
   document.getElementById('vtrans').classList.add('active');
-  // 短暫延遲後重新開始錄音，讓使用者有時間開口
   setTimeout(function(){
     if(!isRec&&activeChar){
       finalTx='';liveTx='';
@@ -1215,7 +1145,6 @@ function initFaceDetection(){
   faceDetector.setOptions({model:'short',minDetectionConfidence:0.55});
   faceDetector.onResults(onFaceResults);
 
-  // 直接用 getUserMedia，不用 Camera API，避免鏡頭衝突
   navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
   .then(function(stream){
     videoEl.srcObject=stream;
@@ -1225,7 +1154,6 @@ function initFaceDetection(){
     console.log('[FaceDetection] started, video size:',videoEl.videoWidth,'x',videoEl.videoHeight);
     document.getElementById('vtrans').textContent='等待偵測臉部...';
 
-    // 用 async tick 確保每幀都等 MediaPipe 處理完再繼續
     var sending=false;
     function tick(){
       if(!faceDetectionRunning)return;
@@ -1242,7 +1170,6 @@ function initFaceDetection(){
         tick();
       });
     }
-    // 等 video 真的有畫面再開始送
     function waitForVideo(){
       if(videoEl.videoWidth>0&&videoEl.readyState>=2){
         console.log('[FaceDetection] video ready, starting tick');
@@ -1265,9 +1192,6 @@ function getBothEyesVisibleFromFaceResults(results){
 
   var det=results.detections[0];
 
-  // ── 雙眼偵測邏輯 ──
-  // MediaPipe Face Detection keypoints 順序：
-  // 0=右眼, 1=左眼, 2=鼻尖, 3=嘴巴, 4=右耳, 5=左耳
   var kps=null;
   if(det.keypoints&&det.keypoints.length>=2){
     kps=det.keypoints;
@@ -1278,24 +1202,20 @@ function getBothEyesVisibleFromFaceResults(results){
   var bothEyesVisible=false;
 
   if(kps&&kps.length>=2){
-    var re=kps[0]; // 右眼
-    var le=kps[1]; // 左眼
+    var re=kps[0];
+    var le=kps[1];
 
-    // 兩眼都要在畫面內（避免只拍到側臉或半張臉）
     var reInFrame=(re.x>0.05&&re.x<0.95&&re.y>0.05&&re.y<0.95);
     var leInFrame=(le.x>0.05&&le.x<0.95&&le.y>0.05&&le.y<0.95);
 
-    // 兩眼間距要夠寬（側臉時間距會變小）
     var eyeDist=Math.abs(le.x-re.x);
     var eyeSpanOk=(eyeDist>0.06);
 
-    // 兩眼高度差不能太大（側臉或角度太偏時容易一高一低）
     var eyeHeightDiff=Math.abs(le.y-re.y);
     var eyeLevelOk=(eyeHeightDiff<0.08);
 
     bothEyesVisible=(reInFrame&&leInFrame&&eyeSpanOk&&eyeLevelOk);
   }else{
-    // keypoints 不可用時，fallback 到臉部置中判斷
     var box=det.boundingBox||(det.locationData&&det.locationData.relativeBoundingBox)||null;
     if(box){
       var cx=box.xCenter!==undefined?box.xCenter:((box.xMin||0)+(box.width||0.5)*0.5);
@@ -1320,13 +1240,8 @@ function updateInterruptEyeState(results){
 function onFaceResults(results){
   if(!activeChar||localRoleIdx===null)return;
 
-  // 先更新 interrupt 專用的雙眼狀態。
-  // 注意：這一步必須在 isSubmitting / speaking return 之前，
-  // 否則 AI 說話中就無法更新雙眼可見狀態，打斷條件會失效。
   var bothEyesVisible=updateInterruptEyeState(results);
 
-  // 以下維持原本「臉部偵測自動啟動聆聽」邏輯：
-  // 錄音中、正在提交、AI 說話中，都不會因臉部偵測而重新啟動聆聽。
   if(isRec)return;
   if(isSubmitting)return;
   if(modelState==='speaking')return;
@@ -1356,7 +1271,6 @@ function startRecAuto(){
   set3DListeningFrom('user');
   try{recognition.start();}catch(e){console.warn('recognition start:',e);}
 
-  // Auto-submit after LISTEN_DURATION_MS
   if(faceListenTimer)clearTimeout(faceListenTimer);
   faceListenTimer=setTimeout(function(){
     if(isRec)stopRecAuto();
@@ -1418,7 +1332,6 @@ function initRec(){
   r.onend=function(){if(isRec){try{r.start();}catch(e){}}};return r;
 }
 
-// ── MULTI-AI FAST SPOKENTEXT CYCLE ──
 function sendMsg(text){
   if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
   if(!db){showNotif('Firebase 尚未連線');return;}
@@ -1496,12 +1409,9 @@ function handleSessionUpdate(session){
       speakSessionText(session);
     }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
       setBubbleText('思考中','thinking');
-      // 目前角色正在聽上一個節點說話，同時預先準備下一句。
-      // Node 3 會依 currentSpeaker 切到 middle_Listening_R / L。
       set3DListeningFrom(session.currentSpeaker);
       document.getElementById('vtrans').textContent='思考中...';
       document.getElementById('vtrans').classList.add('active');
-      // 速度優化：目前角色一開始說話，下一個角色就立刻用 spokenText 思考。
       prepareNextResponse(session);
     }else{
       setBubbleText('正在聆聽...','empty');
@@ -1551,7 +1461,6 @@ function handleSessionUpdate(session){
 function getOnlineRoleIndices(){
   var arr=[];
   for(var i=0;i<3;i++){if(onlineRoles[i])arr.push(i);}
-  // presence 尚未讀到時，允許三角色 demo 先運作；presence 讀到後就只選在線角色。
   if(!arr.length){arr=[0,1,2];}
   return arr;
 }
@@ -1578,7 +1487,6 @@ async function generateCurrentStep(session){
 
   var locked=await acquireStepLock(session.cycleId,session.step,localRoleIdx);
   if(!locked){
-    // Lock taken — wait 4s and retry once (handles slow devices)
     await new Promise(function(r){setTimeout(r,4000);});
     if(activeCycleId!==session.cycleId)return;
     var snap=await db.ref('infectionSession').once('value');
@@ -1626,8 +1534,6 @@ async function generateCurrentStep(session){
       return;
     }
 
-    // spokenText 一生成完成，就馬上更新 session 成 speaking。
-    // 下一個 target 會立刻收到這段 spokenText 並開始背景思考，同時目前角色開始播放語音。
     await db.ref('infectionSession').update({
       status:'speaking',
       currentSpeaker:session.currentSpeaker,
@@ -1643,12 +1549,10 @@ async function generateCurrentStep(session){
     console.error('[generateCurrentStep] error:',e.message);
     if(activeCycleId===session.cycleId){
       var msg=e.message||'';
-      // 404 = wrong model name, don't retry
       if(msg.indexOf('404')>=0||msg.indexOf('not found')>=0||msg.indexOf('not supported')>=0){
         showNotif('OpenAI 模型錯誤，請確認 API Key 支援的模型');
         setBubbleText('AI 模型不可用','empty');
         await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'model_not_found',updatedAt:Date.now()});
-        // Stop face detection from re-triggering immediately
         faceDetectedStart=null;
         isSubmitting=false;
         return;
@@ -1681,8 +1585,6 @@ async function prepareNextResponse(session){
   try{
     if(activeCycleId!==session.cycleId)return;
 
-    // 新邏輯：目前角色說出口的 spokenText，就是下一個角色聽到的內容。
-    // 但仍保留使用者原始輸入，避免後續角色完全忘記最初訊息。
     var incoming=session.spokenText||session.incomingMessage||'';
     var userOrig=session.userOriginalMessage||session.incomingMessage||incoming||'';
     var result=await generateRoleResponse(localRoleIdx,incoming,session.currentSpeaker,session.cycleId,nextStep,userOrig);
@@ -1708,7 +1610,6 @@ async function prepareNextResponse(session){
       createdBy:localDeviceId
     });
 
-    // 如果上一個角色已經說完並正在等待，prepared 一完成就立刻推進。
     await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
   }catch(e){
     console.warn('prepareNextResponse error:',e);
@@ -1776,7 +1677,6 @@ async function tryAdvanceFromWaiting(cycleId,finishedStep){
   var prep=prepSnap.val();
   if(!prep||!prep.ready)return;
 
-  // 再讀一次，避免多台設備同時 advance 造成重複播放。
   var latestSnap=await db.ref('infectionSession').once('value');
   var latest=latestSnap.val();
   if(!latest||latest.cycleId!==cycleId||latest.status!=='waiting_next'||Number(latest.step)!==Number(finishedStep))return;
@@ -1812,7 +1712,7 @@ function parseSpokenText(raw){
       .replace(/```$/,'')
       .replace(/^Here is the JSON:?\s*/i,'')
       .replace(/^Here is JSON:?\s*/i,'')
-      .replace(/^Sure,? here(?:'|’)s the JSON:?\s*/i,'')
+      .replace(/^Sure,? here(?:'|')s the JSON:?\s*/i,'')
       .replace(/^以下是(?:純)?\s*JSON(?:格式)?[:：]?\s*/i,'')
       .replace(/^如下[:：]?\s*/i,'')
       .trim();
@@ -1859,8 +1759,8 @@ function parseSpokenText(raw){
     }catch(e){
       try{
         var repaired=jsonSlice
-          .replace(/[“”]/g,'"')
-          .replace(/[‘’]/g,"'")
+          .replace(/[""]/g,'"')
+          .replace(/['']/g,"'")
           .replace(/,\s*}/g,'}')
           .replace(/,\s*]/g,']');
         var obj2=JSON.parse(repaired);
@@ -2015,7 +1915,6 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
   }
 }
 
-// ── SPEAKING ──
 function speakSessionText(session){
   var key=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
   if(lastSpokenKey===key)return;
@@ -2053,7 +1952,6 @@ function stopSpeaking(){
   set3DState('idle');
 }
 
-// ── ELEVENLABS ──
 function previewVoice(i){
   var name=document.getElementById('c-name-'+i).value||'角色';
   var vname=document.getElementById('c-voice-'+i).value;
@@ -2093,14 +1991,12 @@ async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
     currentAudio.onended=_finishAudio;
     currentAudio.onerror=function(){try{URL.revokeObjectURL(url);}catch(e){}currentAudio=null;currentAudioUrl=null;fallbackSpeak(text,onDone);};
     currentAudio.play().catch(function(err){console.warn('Audio play failed:',err);fallbackSpeak(text,onDone);});
-    // iOS safety: if onended never fires, force advance after estimated time
     var _estMs=Math.max(4000,text.length*130);
     setTimeout(function(){if(!_audioDone){console.warn('[elevenSpeak] timeout fallback');_finishAudio();}},_estMs);
   }catch(err){console.warn('ElevenLabs error:',err.message);fallbackSpeak(text,onDone);}
 }
 function fallbackSpeak(text,onDone){var u=new SpeechSynthesisUtterance(text);u.lang='zh-TW';u.onend=onDone;u.onerror=onDone;speechSynthesis.speak(u);}
 
-// ── ADMIN: 測試與查詢 ──
 async function testElevenLabs(){
   if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}showNotif('測試中...');
   try{
@@ -2128,7 +2024,6 @@ async function fetchVoiceList(){
   }catch(e){document.getElementById('voice-list-content').textContent='錯誤：'+e.message;}
 }
 
-// ── INIT ──
 buildTraits();speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
 (function(){var o=gk('ie_ok'),el=gk('ie_ek');if(o&&el){openaiKey=o;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}})();
 

@@ -634,29 +634,46 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   }
 
   // ── MOUTH SYSTEM ──────────────────────────────────────────────────
-  // findHeadBone：廣泛匹配各種 GLB bone 命名（Head / head / mixamorigHead 等）
+  // findHeadBone：廣泛匹配各種 GLB bone 命名
+  // 很多 GLB 匯出後骨骼是 Object3D 而非 Bone，所以不能只檢查 isBone
   function findHeadBone(root){
     var found=null,fallback=null;
+    var allNodes=[];
+
     root.traverse(function(obj){
-      if(obj.type==='Bone'||obj.isBone){
-        var n=String(obj.name||'').toLowerCase();
-        if(n==='head'||n.endsWith('head')){found=found||obj;}
-        else if(!fallback&&n.indexOf('head')>=0){fallback=obj;}
+      // 收集所有有名稱的節點（不限 Bone 型別）
+      if(obj.name){allNodes.push(obj);}
+
+      var n=String(obj.name||'').toLowerCase();
+      if(!n)return;
+
+      // 精確匹配優先：head / head_jnt / j_head 等
+      if(n==='head'||n==='head_jnt'||n==='j_head'||
+         n==='j_bip_c_head'||n.endsWith('_head')||n.endsWith('-head')){
+        found=found||obj;
+        return;
       }
+      // 寬鬆匹配：名稱中含 head 的任何節點
+      if(!fallback&&n.indexOf('head')>=0){fallback=obj;}
     });
-    if(!found&&!fallback){
-      // debug：列印所有 bone 名稱，方便排查
-      root.traverse(function(obj){
-        if(obj.type==='Bone'||obj.isBone){
-          console.log('[IE3D Mouth] bone found:',obj.name);
-        }
-      });
+
+    var result=found||fallback;
+
+    // Debug：永遠印出所有節點讓你知道實際結構
+    console.log('[IE3D Mouth] traverse result: found=',
+      result?result.name:'none',
+      '| total nodes=',allNodes.length);
+    if(!result){
+      console.warn('[IE3D Mouth] head bone not found. All named nodes:',
+        allNodes.map(function(o){return o.name+' ('+o.type+')';}).join(', '));
     }
-    return found||fallback;
+
+    return result;
   }
 
-  // createMouthForRoot：用 PlaneGeometry 建立嘴型 mesh，掛到 head bone
-  // 使用 PlaneGeometry 而非 SphereGeometry，更薄、不易與臉部網格 z-fighting
+  // createMouthForRoot：嘴巴 mesh 直接加到 scene（world space），
+  // 每幀在 updateActiveMouth 裡跟隨 headBone 的 world position。
+  // 這樣完全迴避 head bone local scale 壓縮導致嘴巴不可見的問題。
   function createMouthForRoot(root,idx){
     var cfg=MODEL_CONFIGS[idx]||{};
     var mc=cfg.mouth||{};
@@ -665,61 +682,92 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var assetRoot=root.userData.assetRoot||root;
     var headBone=findHeadBone(assetRoot);
     if(!headBone){
-      console.warn('[IE3D Mouth] Head bone not found for role',idx,
-        '— 嘴巴無法掛載。請在 Console 查看 bone 名稱後調整 findHeadBone()');
+      console.warn('[IE3D Mouth] 無法建立嘴巴：role',idx,'找不到 head bone');
       return;
     }
 
-    // PlaneGeometry：正面朝 local +Z，比球形更薄，不容易穿插臉部
     var geo=new THREE.PlaneGeometry(1,1,1,1);
     var mat=new THREE.MeshBasicMaterial({
       color:mc.color||0x1a0305,
       transparent:true,
-      opacity:0.92,
+      opacity:0.95,
       side:THREE.DoubleSide,
       depthTest:true,
-      depthWrite:false   // 避免 z-fighting
+      depthWrite:false
     });
 
     var mouth=new THREE.Mesh(geo,mat);
     mouth.name='IE3D_Mouth_'+idx;
     mouth.frustumCulled=false;
+    mouth.renderOrder=999;
+    mouth.visible=false; // 先隱藏，等 applyState 顯示 root 時才顯示
 
-    var p=mc.pos||[0,0.08,-0.22];
-    var r=mc.rot||[0,0,0];
     var closed=mc.closedScale||[0.16,0.018,0.01];
     var open=mc.openScale||[0.16,0.13,0.01];
 
-    mouth.position.set(p[0],p[1],p[2]);
-    mouth.rotation.set(r[0],r[1],r[2]);
     mouth.scale.set(closed[0],closed[1],closed[2]);
-
     mouth.userData.closedScale=new THREE.Vector3(closed[0],closed[1],closed[2]);
     mouth.userData.openScale=new THREE.Vector3(open[0],open[1],open[2]);
     mouth.userData.openAmount=0;
+    // 儲存 pos offset（world space 偏移）
+    mouth.userData.posOffset=new THREE.Vector3(
+      (mc.pos||[0,0.08,-0.22])[0],
+      (mc.pos||[0,0.08,-0.22])[1],
+      (mc.pos||[0,0.08,-0.22])[2]
+    );
+    mouth.userData.headBoneRef=headBone;
+    mouth.userData.parentRootRef=root;
 
-    headBone.add(mouth);
+    // 直接加到 scene（world space），不掛在 bone 下
+    if(scene)scene.add(mouth);
+
     root.userData.mouth=mouth;
     root.userData.headBone=headBone;
 
-    console.log('[IE3D Mouth] created for role',idx,'bone:',headBone.name,
-      'pos:',p,'facingY:',cfg.facingY);
+    root.updateMatrixWorld(true);
+    var wp=new THREE.Vector3();
+    headBone.getWorldPosition(wp);
+    console.log('[IE3D Mouth] created role',idx,
+      'bone:',headBone.name,'('+headBone.type+')',
+      'headWorldPos:',wp.x.toFixed(3),wp.y.toFixed(3),wp.z.toFixed(3));
   }
 
-  // updateActiveMouth：每幀在 animate() 裡呼叫
-  // speaking → 嘴巴用 sin 模擬開合；其他狀態 → 平滑閉合
+  // updateActiveMouth：每幀追蹤 activeRoot 的 headBone world position
+  // 並根據 currentState 控制開合動畫
   function updateActiveMouth(){
-    if(!activeRoot||!activeRoot.userData||!activeRoot.userData.mouth)return;
-    var mouth=activeRoot.userData.mouth;
-    var isSpeaking=(currentState==='speaking');
+    // 先把所有 cached mouth 隱藏，只顯示 activeRoot 的
+    Object.keys(modelCache).forEach(function(k){
+      var m=modelCache[k]&&modelCache[k].root&&modelCache[k].root.userData.mouth;
+      if(m)m.visible=false;
+    });
 
+    if(!activeRoot||!activeRoot.userData||!activeRoot.userData.mouth)return;
+
+    var mouth=activeRoot.userData.mouth;
+    var headBone=activeRoot.userData.headBone;
+
+    // 每幀用 headBone world position 更新嘴巴位置
+    if(headBone){
+      activeRoot.updateMatrixWorld(true);
+      var wp=new THREE.Vector3();
+      headBone.getWorldPosition(wp);
+      var off=mouth.userData.posOffset||new THREE.Vector3(0,0,0);
+      mouth.position.set(wp.x+off.x, wp.y+off.y, wp.z+off.z);
+
+      // 讓嘴巴面向攝影機（billboarding），確保永遠可見
+      if(camera){
+        mouth.quaternion.copy(camera.quaternion);
+      }
+    }
+
+    mouth.visible=true;
+
+    var isSpeaking=(currentState==='speaking');
     var targetOpen=0;
     if(isSpeaking){
-      // 0.15 保底讓嘴不完全閉合，0.85 是最大開幅
       targetOpen=0.15+Math.abs(Math.sin(Date.now()*0.018))*0.85;
     }
 
-    // 平滑插值：說話時快速開合，停止時緩慢閉合
     var speed=isSpeaking?0.35:0.18;
     mouth.userData.openAmount+=(targetOpen-mouth.userData.openAmount)*speed;
 
@@ -919,6 +967,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   function destroy(){
     roleIndex=null;
     currentState='idle';
+    // 清除所有嘴巴 mesh（它們是直接加在 scene 上的）
+    Object.keys(modelCache).forEach(function(k){
+      var mouth=modelCache[k]&&modelCache[k].root&&modelCache[k].root.userData.mouth;
+      if(mouth&&mouth.parent){mouth.parent.remove(mouth);}
+    });
     container=getContainer();
     if(container)container.style.display='none';
     removeAllModelRootsFromScene();

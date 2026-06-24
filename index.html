@@ -306,7 +306,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       facingY:Math.PI,
       offsetX:0,
       offsetY:-0.35,
-      offsetZ:0
+      offsetZ:0,
+      mouth:{
+        enabled:true,
+        pos:[0,0.08,-0.22],
+        rot:[0,0,0],
+        closedScale:[0.16,0.018,0.01],
+        openScale:[0.16,0.13,0.01],
+        color:0x1a0305
+      }
     },
     1:{
       idle:'assets/Boy_Idle.glb',
@@ -316,7 +324,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       facingY:Math.PI,
       offsetX:0,
       offsetY:-0.35,
-      offsetZ:0
+      offsetZ:0,
+      mouth:{
+        enabled:true,
+        pos:[0,0.08,-0.22],
+        rot:[0,0,0],
+        closedScale:[0.16,0.018,0.01],
+        openScale:[0.16,0.13,0.01],
+        color:0x1a0305
+      }
     },
     2:{
       idle:'assets/middle_Idle.glb',
@@ -326,10 +342,20 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       listeningNode2:'assets/middle_Listening_L.glb',
       thinking:'assets/middle_Thinking.glb',
       speaking:'assets/middle_Idle.glb',
-      facingY:0,        // ← 修改：原本是 Math.PI，改為 0 修正節點3背對鏡頭的問題
+      facingY:0,
       offsetX:0,
       offsetY:-0.35,
-      offsetZ:0
+      offsetZ:0,
+      // 節點3 facingY=0，模型正面朝 +Z，所以嘴巴 pos z 用正值
+      // 若嘴巴出現在後腦，把 0.22 改成 -0.22
+      mouth:{
+        enabled:true,
+        pos:[0,0.08,0.22],
+        rot:[0,0,0],
+        closedScale:[0.16,0.018,0.01],
+        openScale:[0.16,0.13,0.01],
+        color:0x1a0305
+      }
     }
   };
   var STATE_TO_MODEL={
@@ -607,9 +633,113 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     return root;
   }
 
+  // ── MOUTH SYSTEM ──────────────────────────────────────────────────
+  // findHeadBone：廣泛匹配各種 GLB bone 命名（Head / head / mixamorigHead 等）
+  function findHeadBone(root){
+    var found=null,fallback=null;
+    root.traverse(function(obj){
+      if(obj.type==='Bone'||obj.isBone){
+        var n=String(obj.name||'').toLowerCase();
+        if(n==='head'||n.endsWith('head')){found=found||obj;}
+        else if(!fallback&&n.indexOf('head')>=0){fallback=obj;}
+      }
+    });
+    if(!found&&!fallback){
+      // debug：列印所有 bone 名稱，方便排查
+      root.traverse(function(obj){
+        if(obj.type==='Bone'||obj.isBone){
+          console.log('[IE3D Mouth] bone found:',obj.name);
+        }
+      });
+    }
+    return found||fallback;
+  }
+
+  // createMouthForRoot：用 PlaneGeometry 建立嘴型 mesh，掛到 head bone
+  // 使用 PlaneGeometry 而非 SphereGeometry，更薄、不易與臉部網格 z-fighting
+  function createMouthForRoot(root,idx){
+    var cfg=MODEL_CONFIGS[idx]||{};
+    var mc=cfg.mouth||{};
+    if(!mc.enabled)return;
+
+    var assetRoot=root.userData.assetRoot||root;
+    var headBone=findHeadBone(assetRoot);
+    if(!headBone){
+      console.warn('[IE3D Mouth] Head bone not found for role',idx,
+        '— 嘴巴無法掛載。請在 Console 查看 bone 名稱後調整 findHeadBone()');
+      return;
+    }
+
+    // PlaneGeometry：正面朝 local +Z，比球形更薄，不容易穿插臉部
+    var geo=new THREE.PlaneGeometry(1,1,1,1);
+    var mat=new THREE.MeshBasicMaterial({
+      color:mc.color||0x1a0305,
+      transparent:true,
+      opacity:0.92,
+      side:THREE.DoubleSide,
+      depthTest:true,
+      depthWrite:false   // 避免 z-fighting
+    });
+
+    var mouth=new THREE.Mesh(geo,mat);
+    mouth.name='IE3D_Mouth_'+idx;
+    mouth.frustumCulled=false;
+
+    var p=mc.pos||[0,0.08,-0.22];
+    var r=mc.rot||[0,0,0];
+    var closed=mc.closedScale||[0.16,0.018,0.01];
+    var open=mc.openScale||[0.16,0.13,0.01];
+
+    mouth.position.set(p[0],p[1],p[2]);
+    mouth.rotation.set(r[0],r[1],r[2]);
+    mouth.scale.set(closed[0],closed[1],closed[2]);
+
+    mouth.userData.closedScale=new THREE.Vector3(closed[0],closed[1],closed[2]);
+    mouth.userData.openScale=new THREE.Vector3(open[0],open[1],open[2]);
+    mouth.userData.openAmount=0;
+
+    headBone.add(mouth);
+    root.userData.mouth=mouth;
+    root.userData.headBone=headBone;
+
+    console.log('[IE3D Mouth] created for role',idx,'bone:',headBone.name,
+      'pos:',p,'facingY:',cfg.facingY);
+  }
+
+  // updateActiveMouth：每幀在 animate() 裡呼叫
+  // speaking → 嘴巴用 sin 模擬開合；其他狀態 → 平滑閉合
+  function updateActiveMouth(){
+    if(!activeRoot||!activeRoot.userData||!activeRoot.userData.mouth)return;
+    var mouth=activeRoot.userData.mouth;
+    var isSpeaking=(currentState==='speaking');
+
+    var targetOpen=0;
+    if(isSpeaking){
+      // 0.15 保底讓嘴不完全閉合，0.85 是最大開幅
+      targetOpen=0.15+Math.abs(Math.sin(Date.now()*0.018))*0.85;
+    }
+
+    // 平滑插值：說話時快速開合，停止時緩慢閉合
+    var speed=isSpeaking?0.35:0.18;
+    mouth.userData.openAmount+=(targetOpen-mouth.userData.openAmount)*speed;
+
+    var cl=mouth.userData.closedScale;
+    var op=mouth.userData.openScale;
+    var a=mouth.userData.openAmount;
+
+    mouth.scale.set(
+      THREE.MathUtils.lerp(cl.x,op.x,a),
+      THREE.MathUtils.lerp(cl.y,op.y,a),
+      THREE.MathUtils.lerp(cl.z,op.z,a)
+    );
+  }
+  // ── END MOUTH SYSTEM ──────────────────────────────────────────────
+
   function finishModelLoad(key,idx,state,path,gltf){
     var root=createRenderableRoot(key,idx,state,gltf);
     normalizeModel(root,idx,state);
+    // idle GLB 才建嘴巴（speaking 重用 idle，其他狀態不需要嘴巴動畫）
+    if(state==='idle')createMouthForRoot(root,idx);
     root.visible=false;
 
     modelCache[key]={
@@ -754,6 +884,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         activeRoot.userData.facingAnchor.rotation.copy(activeRoot.userData.baseFacingRotation);
       }
     }
+    updateActiveMouth();
     renderer.render(scene,camera);
   }
 

@@ -684,7 +684,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     // 要讓嘴巴在世界空間看起來是 0.3 單位，
     // 就必須在 local space 用 0.3 / normalizedScale 來補償
     var nScale=root.userData.normalizedScale||1;
-    var mouthWorldSize=0.3; // 目標世界大小（可調整）
+    var mouthWorldSize=0.06; // 目標世界大小（可調整）
     var localSize=mouthWorldSize/nScale;
 
     var geo=new THREE.SphereGeometry(localSize,16,16);
@@ -740,8 +740,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   function finishModelLoad(key,idx,state,path,gltf){
     var root=createRenderableRoot(key,idx,state,gltf);
     normalizeModel(root,idx,state);
-    // idle GLB 才建嘴巴（speaking 重用 idle，其他狀態不需要嘴巴動畫）
-    if(state==='idle')createMouthForRoot(root,idx);
+    // 嘴巴只需要在「實際使用 idle GLB」的 root 上建立
+    // speaking 和 idle 用同一個 GLB 路徑，兩者都要建嘴巴
+    // 用 cfg.idle 比對路徑，確保所有重用 idle GLB 的 state 都有嘴巴
+    var cfg2=MODEL_CONFIGS[idx]||{};
+    var isIdleGlb=(cfg2.idle&&path&&
+      path.replace(/^\.?\//,'').toLowerCase()===
+      cfg2.idle.replace(/^\.?\//,'').toLowerCase());
+    if(isIdleGlb)createMouthForRoot(root,idx);
     root.visible=false;
 
     modelCache[key]={

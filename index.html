@@ -312,7 +312,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       listening:'assets/Boy_Listening_R.glb',
       thinking:'assets/Boy_Thinking.glb',
       speaking:'assets/Boy_Idle.glb',
-      rotationY:Math.PI
+      rotationY:0
     }
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
@@ -488,6 +488,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
   function init(idx){
     roleIndex=idx;
+    console.log('[IE3D] init called, roleIndex=',idx,'config=',MODEL_CONFIGS[idx]||null);
     container=getContainer();
     if(!container)return;
     if(!hasModelForRole(idx)){
@@ -742,17 +743,38 @@ function setBubbleText(text,state){
   el.classList.remove('empty','thinking','speaking');if(state)el.classList.add(state);el.textContent=text||'';
 }
 function setModelState(s){modelState=s;}
+var pending3DInitTimer=null;
+var pending3DState='idle';
 function init3DForRole(idx){
-  if(window.IE3D&&typeof window.IE3D.init==='function'){
-    window.IE3D.init(idx);
-  }else if(idx===0){
-    setTimeout(function(){if(window.IE3D&&typeof window.IE3D.init==='function')window.IE3D.init(idx);},500);
+  var attempts=0;
+  if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
+
+  function tryInit(){
+    attempts++;
+    if(window.IE3D&&typeof window.IE3D.init==='function'){
+      console.log('[IE3D] init role request:',idx);
+      window.IE3D.init(idx);
+      if(pending3DState&&typeof window.IE3D.setState==='function')window.IE3D.setState(pending3DState);
+      if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
+      return true;
+    }
+    if(attempts===1)console.log('[IE3D] waiting for Three module, role:',idx);
+    if(attempts>=60){
+      console.warn('[IE3D] Three module not ready after retry, role:',idx);
+      if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
+    }
+    return false;
   }
+
+  if(!tryInit())pending3DInitTimer=setInterval(tryInit,100);
 }
 function set3DState(state){
-  if(window.IE3D&&typeof window.IE3D.setState==='function')window.IE3D.setState(state);
+  pending3DState=state||'idle';
+  if(window.IE3D&&typeof window.IE3D.setState==='function')window.IE3D.setState(pending3DState);
 }
 function destroy3DLayer(){
+  if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
+  pending3DState='idle';
   if(window.IE3D&&typeof window.IE3D.destroy==='function')window.IE3D.destroy();
 }
 

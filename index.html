@@ -297,7 +297,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   var initialized=false,roleIndex=null,currentState='idle';
   var modelCache={},mixers={},activeRoot=null,loadingKeys={};
 
-  // Node 1 uses Girl models, Node 2 uses Boy models, Node 3 currently has no 3D model.
+  // Node 1 uses Girl models, Node 2 uses Boy models, Node 3 uses middle models.
   // GitHub Pages is case-sensitive, so the loader below will try several safe path variants.
   var MODEL_CONFIGS={
     0:{
@@ -306,23 +306,31 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       thinking:'assets/Girl_Thinking.glb',
       speaking:'assets/Girl_Idle.glb',
       rotationY:Math.PI,
-      offsetY:-0.12
+      offsetY:-0.35
     },
     1:{
       idle:'assets/Boy_Idle.glb',
       listening:'assets/Boy_Listening_R.glb',
       thinking:'assets/Boy_Thinking.glb',
       speaking:'assets/Boy_Idle.glb',
-      // Most exported character GLB files face the opposite direction in Three.js.
-      // Use Math.PI so Node 2 faces the camera instead of showing its back.
+      // Your console already proves this file loads correctly.
+      // The important fix is the transform normalization below.
       rotationY:Math.PI,
-      offsetY:-0.12
+      offsetY:-0.35
+    },
+    2:{
+      idle:'assets/middle_Idle.glb',
+      listening:'assets/middle_Listening_L.glb',
+      thinking:'assets/middle_Listening_M.glb',
+      speaking:'assets/middle_Idle.glb',
+      rotationY:Math.PI,
+      offsetY:-0.35
     }
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
 
-  var MODEL_NORMALIZED_SIZE=3.2;
-  var MODEL_BASE_Y=0.18;
+  var MODEL_NORMALIZED_SIZE=2.45;
+  var MODEL_BASE_Y=0.0;
 
   function getContainer(){return document.getElementById('three-layer');}
   function hasModelForRole(idx){return !!MODEL_CONFIGS[idx];}
@@ -469,33 +477,56 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   }
 
   function normalizeModel(root,idx,state){
-    var box=new THREE.Box3().setFromObject(root);
+    // Important: the console can say "active model" while the model is still invisible
+    // if the exported GLB origin is far away from its mesh.
+    // This function recenters the actual bounding box AFTER applying the final scale/rotation.
+    root.updateMatrixWorld(true);
+
+    var rawBox=new THREE.Box3().setFromObject(root);
     var size=new THREE.Vector3();
     var center=new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
+    rawBox.getSize(size);
+    rawBox.getCenter(center);
 
-    // Center the model first, then normalize size. This keeps exported models visible
-    // even when their origin is far away from the actual mesh.
-    root.position.set(-center.x,-center.y,-center.z);
     var maxDim=Math.max(size.x,size.y,size.z)||1;
     var scale=MODEL_NORMALIZED_SIZE/maxDim;
-    root.scale.setScalar(scale);
-
     var cfg=MODEL_CONFIGS[idx]||{};
-    root.position.y=MODEL_BASE_Y+(cfg.offsetY||0);
-    root.rotation.y=(cfg.rotationY!==undefined)?cfg.rotationY:Math.PI;
+    var rotY=(cfg.rotationY!==undefined)?cfg.rotationY:Math.PI;
+    var targetY=MODEL_BASE_Y+(cfg.offsetY||0);
+
+    root.scale.setScalar(scale);
+    root.rotation.y=rotY;
+
+    // Transform the original bounding-box center through the same scale + rotation,
+    // then move it back to the center of the Three.js camera view.
+    // This fixes Node 2 models that load successfully but appear outside the screen.
+    var transformedCenter=new THREE.Vector3(center.x*scale,center.y*scale,center.z*scale);
+    transformedCenter.applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
+    root.position.set(-transformedCenter.x,targetY-transformedCenter.y,-transformedCenter.z);
+
     root.userData.baseY=root.position.y;
     root.userData.baseRotationY=root.rotation.y;
     root.userData.roleIndex=idx;
     root.userData.modelState=state;
+    root.userData.center=center.clone();
+    root.userData.normalizedScale=scale;
+
+    root.updateMatrixWorld(true);
+    var finalBox=new THREE.Box3().setFromObject(root);
+    var finalSize=new THREE.Vector3();
+    var finalCenter=new THREE.Vector3();
+    finalBox.getSize(finalSize);
+    finalBox.getCenter(finalCenter);
+    console.log('[IE3D] normalized',roleKey(idx,state),'rawSize=',size,'rawCenter=',center,'scale=',scale,'finalCenter=',finalCenter,'finalSize=',finalSize);
+
     root.traverse(function(obj){
       if(obj.isMesh){
+        obj.visible=true;
         obj.frustumCulled=false;
         obj.castShadow=false;
         obj.receiveShadow=false;
         if(obj.material){
-          obj.material.transparent=obj.material.transparent||false;
+          obj.material.side=THREE.DoubleSide;
           obj.material.needsUpdate=true;
         }
       }
@@ -679,7 +710,7 @@ var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','�
 var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
 var RC=['c1','c2','c3'];
 // 背景圖檔名（放在 assets/ 資料夾內）
-var CHAT_BG_FILES=['bg.jpg','bg.jpg','bg.jpg'];
+var CHAT_BG_FILES=['bg-A.png','bg-B.png','bg-C.png'];
 
 // ── STATE ──
 var db=null,openaiKey='',elevenKey='';

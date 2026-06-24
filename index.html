@@ -97,8 +97,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .three-layer{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;display:none;overflow:hidden;}
 .three-layer canvas{display:block;width:100%;height:100%;}
 .chat-scene::after{content:'';position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(transparent,rgba(5,5,8,0.32) 52%,rgba(5,5,8,0.74));pointer-events:none;z-index:2;}
-.chat-cloud-layer{position:absolute;left:8.2%;top:17.1%;width:81.5%;height:16.4%;z-index:4;background:rgba(0,0,0,0.48);border:0.5px solid rgba(255,255,255,0.16);border-radius:18px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 12px 36px rgba(0,0,0,0.28);pointer-events:none;}
-.ai-bubble-text{position:absolute;left:9.2%;top:18.3%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:rgba(255,255,255,0.94);font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:0 2px 10px rgba(0,0,0,0.55);scrollbar-width:thin;}
+.chat-cloud-layer{position:absolute;left:8.2%;top:13.7%;width:81.5%;height:16.4%;z-index:4;background:rgba(0,0,0,0.48);border:0.5px solid rgba(255,255,255,0.16);border-radius:18px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 12px 36px rgba(0,0,0,0.28);pointer-events:none;}
+.ai-bubble-text{position:absolute;left:9.2%;top:14.6%;width:79.5%;height:14.7%;z-index:5;display:flex;align-items:flex-start;justify-content:flex-start;padding:14px 18px 10px 18px;color:rgba(255,255,255,0.94);font-family:var(--serif);font-size:clamp(14px,2.15vh,22px);font-weight:700;line-height:1.55;letter-spacing:0.02em;overflow-y:auto;word-break:break-word;white-space:pre-line;text-shadow:0 2px 10px rgba(0,0,0,0.55);scrollbar-width:thin;}
 .ai-bubble-text.empty{color:rgba(255,255,255,0.52);font-weight:500;}
 .ai-bubble-text.thinking{color:rgba(255,255,255,0.76);font-weight:700;}
 .ai-bubble-text.thinking::after{content:'';width:0.4em;animation:dotText 1.1s steps(4,end) infinite;}
@@ -296,20 +296,36 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   var container=null,renderer=null,scene=null,camera=null,loader=null,clock=null,rafId=null;
   var initialized=false,roleIndex=null,currentState='idle';
   var models={},mixers={},visibleModel=null;
-  var MODEL_PATHS={
-    idle:'assets/Girl_Idle.glb',
-    listening:'assets/Girl_Listening_L.glb',
-    thinking:'assets/Girl_Thinking.glb',
-    speaking:'assets/Girl_Idle.glb'
+
+  // Node 1 uses Girl models, Node 2 uses Boy models, Node 3 currently has no 3D model.
+  // Each role keeps its own cached GLB set so switching roles will not reuse the wrong model.
+  var MODEL_CONFIGS={
+    0:{
+      idle:'assets/Girl_Idle.glb',
+      listening:'assets/Girl_Listening_L.glb',
+      thinking:'assets/Girl_Thinking.glb',
+      speaking:'assets/Girl_Idle.glb'
+    },
+    1:{
+      idle:'assets/Boy_Idle.glb',
+      listening:'assets/Boy_Listening_R.glb',
+      thinking:'assets/Boy_Thinking.glb',
+      speaking:'assets/Boy_Idle.glb'
+    }
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
-  // The GLB is authored facing away from the camera in this layout, so rotate it 180° to face forward.
+
+  // The current GLB set is authored facing away from the camera in this layout, so rotate it 180° to face forward.
   var MODEL_BASE_ROTATION_Y=Math.PI;
-  // Display tuning: 50% larger than previous 2.35 sizing, and lifted upward on screen.
+  // Shared display tuning for Node 1 and Node 2.
   var MODEL_NORMALIZED_SIZE=3.2;
-  var MODEL_BASE_Y=0.55;
+  // Moved down from 0.55 to 0.35 so both characters sit lower in the frame.
+  var MODEL_BASE_Y=0.35;
 
   function getContainer(){return document.getElementById('three-layer');}
+  function hasModelForRole(idx){return !!MODEL_CONFIGS[idx];}
+  function roleKey(idx,state){return String(idx)+'_'+state;}
+
   function ensureScene(){
     container=getContainer();
     if(!container)return false;
@@ -339,7 +355,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     initialized=true;
     resize();
     window.addEventListener('resize',resize);
-    loadAllModels();
     animate();
     return true;
   }
@@ -374,7 +389,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     });
   }
 
-  function loadModel(key,path){
+  function loadModel(idx,state,path){
+    var key=roleKey(idx,state);
     if(models[key])return;
     loader.load(path,function(gltf){
       var root=gltf.scene;
@@ -399,18 +415,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     });
   }
 
-  function loadAllModels(){
-    loadModel('idle',MODEL_PATHS.idle);
-    loadModel('listening',MODEL_PATHS.listening);
-    loadModel('thinking',MODEL_PATHS.thinking);
+  function loadRoleModels(idx){
+    var cfg=MODEL_CONFIGS[idx];
+    if(!cfg)return;
+    loadModel(idx,'idle',cfg.idle);
+    loadModel(idx,'listening',cfg.listening);
+    loadModel(idx,'thinking',cfg.thinking);
+  }
+
+  function hideAllModels(){
+    Object.keys(models).forEach(function(k){models[k].visible=false;});
+    visibleModel=null;
   }
 
   function applyState(state){
     currentState=state||'idle';
-    if(roleIndex!==0){return;}
-    var modelKey=STATE_TO_MODEL[currentState]||'idle';
-    Object.keys(models).forEach(function(k){models[k].visible=(k===modelKey);});
-    visibleModel=models[modelKey]||null;
+    if(!hasModelForRole(roleIndex)){
+      hideAllModels();
+      return;
+    }
+    var modelState=STATE_TO_MODEL[currentState]||'idle';
+    var activeKey=roleKey(roleIndex,modelState);
+    Object.keys(models).forEach(function(k){models[k].visible=(k===activeKey);});
+    visibleModel=models[activeKey]||null;
   }
 
   function animate(){
@@ -430,20 +457,24 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     roleIndex=idx;
     container=getContainer();
     if(!container)return;
-    if(idx!==0){
+    if(!hasModelForRole(idx)){
       container.style.display='none';
+      hideAllModels();
       return;
     }
     container.style.display='block';
     ensureScene();
     resize();
+    loadRoleModels(idx);
     applyState('idle');
   }
 
   function setState(state){
-    if(roleIndex!==0)return;
+    if(!hasModelForRole(roleIndex))return;
     if(!ensureScene())return;
-    container.style.display='block';
+    container=getContainer();
+    if(container)container.style.display='block';
+    loadRoleModels(roleIndex);
     applyState(state||'idle');
   }
 
@@ -452,7 +483,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     currentState='idle';
     container=getContainer();
     if(container)container.style.display='none';
-    if(models){Object.keys(models).forEach(function(k){models[k].visible=false;});}
+    hideAllModels();
   }
 
   window.IE3D={init:init,setState:setState,destroy:destroy};

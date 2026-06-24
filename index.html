@@ -305,22 +305,27 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       listening:'assets/Girl_Listening_L.glb',
       thinking:'assets/Girl_Thinking.glb',
       speaking:'assets/Girl_Idle.glb',
-      rotationY:Math.PI,
-      offsetY:-0.35
+      // 所有節點都改用外層 facingAnchor 控制朝向。
+      // 如果節點 1 還是背面，只需要把這裡改成 0 或 -Math.PI。
+      facingY:Math.PI,
+      offsetX:0,
+      offsetY:-0.35,
+      offsetZ:0
     },
     1:{
       idle:'assets/Boy_Idle.glb',
       listening:'assets/Boy_Listening_R.glb',
       thinking:'assets/Boy_Thinking.glb',
       speaking:'assets/Boy_Idle.glb',
-      // Your console already proves this file loads correctly.
-      // The important fix is the transform normalization below.
-      rotationY:Math.PI,
-      offsetY:-0.35
+      // 如果節點 2 還是背面，只需要把這裡改成 0 或 -Math.PI。
+      facingY:Math.PI,
+      offsetX:0,
+      offsetY:-0.35,
+      offsetZ:0
     },
     2:{
       idle:'assets/middle_Idle.glb',
-      // Node 3 / middle 的聆聽狀態拆成三種：
+      // 節點 3 / middle 的聆聽狀態拆成三種：
       // 使用者說話 = middle_Listening_M.glb
       // 節點 1 說話 = middle_Listening_R.glb
       // 節點 2 說話 = middle_Listening_L.glb
@@ -330,10 +335,21 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       listeningNode2:'assets/middle_Listening_L.glb',
       thinking:'assets/middle_Thinking.glb',
       speaking:'assets/middle_Idle.glb',
-      // middle 模型原本用 Math.PI 會背對畫面；改成 0 讓節點 3 正面朝向鏡頭
-      // Node 3 middle 模型的匯出方向與 Girl/Boy 相反；畫面若看到背面，需轉 180 度
-      rotationY:Math.PI,
-      offsetY:-0.35
+      // 節點 3 也使用同一套 facingAnchor。若仍背面，優先只改這個值。
+      facingY:Math.PI,
+      offsetX:0,
+      offsetY:-0.35,
+      offsetZ:0
+      /*
+      如果未來發現某一個動作檔方向不同，可以取消下面這段註解做單獨修正：
+      stateFacingY:{
+        idle:Math.PI,
+        listeningUser:Math.PI,
+        listeningNode1:Math.PI,
+        listeningNode2:Math.PI,
+        thinking:Math.PI
+      }
+      */
     }
   };
   var STATE_TO_MODEL={
@@ -497,10 +513,31 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     camera.updateProjectionMatrix();
   }
 
+  function getFacingY(idx,state){
+    var cfg=MODEL_CONFIGS[idx]||{};
+    var modelState=state||'idle';
+    if(cfg.stateFacingY&&cfg.stateFacingY[modelState]!==undefined)return cfg.stateFacingY[modelState];
+    if(cfg.facingY!==undefined)return cfg.facingY;
+    // 兼容舊版設定名稱
+    if(cfg.rotationY!==undefined)return cfg.rotationY;
+    return Math.PI;
+  }
+
   function normalizeModel(root,idx,state){
-    // Important: the console can say "active model" while the model is still invisible
-    // if the exported GLB origin is far away from its mesh.
-    // This function recenters the actual bounding box AFTER applying the final scale/rotation.
+    // root 只負責「整體位置 / 大小 / 置中」；
+    // facingAnchor 才負責「模型面向」。
+    // 這樣 GLB 內部 armature / root animation 不會把外層方向抵消。
+    var cfg=MODEL_CONFIGS[idx]||{};
+    var facingY=getFacingY(idx,state);
+    var facingAnchor=root.userData.facingAnchor||null;
+
+    root.position.set(0,0,0);
+    root.rotation.set(0,0,0);
+    root.scale.set(1,1,1);
+    if(facingAnchor){
+      facingAnchor.rotation.set(0,facingY,0);
+    }
+
     root.updateMatrixWorld(true);
 
     var rawBox=new THREE.Box3().setFromObject(root);
@@ -511,28 +548,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     var maxDim=Math.max(size.x,size.y,size.z)||1;
     var scale=MODEL_NORMALIZED_SIZE/maxDim;
-    var cfg=MODEL_CONFIGS[idx]||{};
-    var rotY=(cfg.rotationY!==undefined)?cfg.rotationY:Math.PI;
+    var targetX=(cfg.offsetX||0);
     var targetY=MODEL_BASE_Y+(cfg.offsetY||0)+MODEL_EXTRA_OFFSET_Y;
+    var targetZ=(cfg.offsetZ||0);
 
     root.scale.setScalar(scale);
-    root.rotation.y=rotY;
+    root.position.set(
+      targetX-center.x*scale,
+      targetY-center.y*scale,
+      targetZ-center.z*scale
+    );
 
-    // Transform the original bounding-box center through the same scale + rotation,
-    // then move it back to the center of the Three.js camera view.
-    // This fixes Node 2 models that load successfully but appear outside the screen.
-    var transformedCenter=new THREE.Vector3(center.x*scale,center.y*scale,center.z*scale);
-    transformedCenter.applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
-    root.position.set(-transformedCenter.x,targetY-transformedCenter.y,-transformedCenter.z);
-
-    root.userData.baseY=root.position.y;
-    root.userData.baseRotationY=root.rotation.y;
     root.userData.basePosition=root.position.clone();
     root.userData.baseRotation=root.rotation.clone();
+    root.userData.baseScale=root.scale.clone();
+    root.userData.baseY=root.position.y;
     root.userData.roleIndex=idx;
     root.userData.modelState=state;
     root.userData.center=center.clone();
     root.userData.normalizedScale=scale;
+    root.userData.facingY=facingY;
+    if(facingAnchor){
+      root.userData.baseFacingRotation=facingAnchor.rotation.clone();
+    }
 
     root.updateMatrixWorld(true);
     var finalBox=new THREE.Box3().setFromObject(root);
@@ -540,7 +578,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var finalCenter=new THREE.Vector3();
     finalBox.getSize(finalSize);
     finalBox.getCenter(finalCenter);
-    console.log('[IE3D] normalized',roleKey(idx,state),'rawSize=',size,'rawCenter=',center,'scale=',scale,'finalCenter=',finalCenter,'finalSize=',finalSize);
+    console.log('[IE3D] normalized',roleKey(idx,state),'facingY=',facingY,'rawSize=',size,'rawCenter=',center,'scale=',scale,'finalCenter=',finalCenter,'finalSize=',finalSize);
 
     root.traverse(function(obj){
       if(obj.isMesh){
@@ -572,15 +610,52 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     activeRoot=null;
   }
 
+  function createRenderableRoot(key,idx,state,gltf){
+    var assetRoot=gltf.scene;
+    assetRoot.name='IE3D_asset_'+key;
+
+    // 保留 GLB 本身的初始 transform，動畫更新後會鎖回來，避免 root motion 漂移。
+    assetRoot.userData.basePosition=assetRoot.position.clone();
+    assetRoot.userData.baseQuaternion=assetRoot.quaternion.clone();
+    assetRoot.userData.baseScale=assetRoot.scale.clone();
+
+    // facingAnchor：唯一負責模型正面方向的外層。
+    // 節點 1、2、3 全部都用同一種結構，不再直接旋轉 gltf.scene。
+    var facingAnchor=new THREE.Group();
+    facingAnchor.name='IE3D_facingAnchor_'+key;
+    facingAnchor.add(assetRoot);
+
+    // root：唯一負責整體位置、大小、置中。
+    var root=new THREE.Group();
+    root.name='IE3D_root_'+key;
+    root.add(facingAnchor);
+
+    root.userData.assetRoot=assetRoot;
+    root.userData.facingAnchor=facingAnchor;
+    root.userData.anchorWrapper=true;
+    root.userData.lockAssetRootMotion=true;
+    root.userData.key=key;
+    return root;
+  }
+
   function finishModelLoad(key,idx,state,path,gltf){
-    var root=gltf.scene;
-    root.name='IE3D_'+key;
+    var root=createRenderableRoot(key,idx,state,gltf);
     normalizeModel(root,idx,state);
     root.visible=false;
-    modelCache[key]={root:root,path:path,idx:idx,state:state};
+
+    modelCache[key]={
+      root:root,
+      assetRoot:root.userData.assetRoot,
+      facingAnchor:root.userData.facingAnchor,
+      path:path,
+      idx:idx,
+      state:state
+    };
 
     if(gltf.animations&&gltf.animations.length){
-      var mixer=new THREE.AnimationMixer(root);
+      // 動畫掛在真正的 GLB assetRoot 上，不掛在外層 root / facingAnchor。
+      // 這樣外層可以穩定控制方向、位置與大小。
+      var mixer=new THREE.AnimationMixer(root.userData.assetRoot);
       gltf.animations.forEach(function(clip){
         var action=mixer.clipAction(clip);
         action.setLoop(THREE.LoopRepeat,Infinity);
@@ -589,7 +664,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       mixers[key]=mixer;
     }
     delete loadingKeys[key];
-    console.log('[IE3D] loaded',key,path);
+    console.log('[IE3D] loaded',key,path,'anchorWrapper=true','facingY=',root.userData.facingY);
     clearModelStatus();
     applyState(currentState,true);
   }
@@ -695,13 +770,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     rafId=requestAnimationFrame(animate);
     if(!renderer||!scene||!camera||!clock)return;
     var dt=clock.getDelta();
-    Object.keys(mixers).forEach(function(k){mixers[k].update(dt);});
+
+    Object.keys(mixers).forEach(function(k){
+      var mixer=mixers[k];
+      mixer.update(dt);
+
+      // 如果 GLB 動畫本身有 root motion，鎖住 assetRoot，避免模型邊播動畫邊漂移。
+      var data=modelCache[k];
+      var assetRoot=data&&data.assetRoot;
+      if(assetRoot&&assetRoot.userData&&assetRoot.userData.basePosition){
+        assetRoot.position.copy(assetRoot.userData.basePosition);
+        assetRoot.quaternion.copy(assetRoot.userData.baseQuaternion);
+        assetRoot.scale.copy(assetRoot.userData.baseScale);
+      }
+    });
+
     if(activeRoot&&LOCK_MODEL_ROOT_MOTION){
-      // Keep the model anchored.
-      // The previous version added sin() to rotation.y and position.y every frame,
-      // which made Node 2 look like it was drifting / moving around.
+      // root 永遠只維持 normalize 後的位置與大小。
       if(activeRoot.userData.basePosition)activeRoot.position.copy(activeRoot.userData.basePosition);
       if(activeRoot.userData.baseRotation)activeRoot.rotation.copy(activeRoot.userData.baseRotation);
+      if(activeRoot.userData.baseScale)activeRoot.scale.copy(activeRoot.userData.baseScale);
+      if(activeRoot.userData.facingAnchor&&activeRoot.userData.baseFacingRotation){
+        activeRoot.userData.facingAnchor.rotation.copy(activeRoot.userData.baseFacingRotation);
+      }
     }
     renderer.render(scene,camera);
   }

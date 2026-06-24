@@ -332,6 +332,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   // 2.45 × 1.3 = 3.185：所有 GLB 統一放大 30%
   var MODEL_NORMALIZED_SIZE=3.185;
   var MODEL_BASE_Y=0.0;
+  var MODEL_EXTRA_OFFSET_Y=-0.30;
   // 鎖定 GLB root transform，避免節點 2 因 root animation 或每幀浮動造成位置飄移
   var LOCK_MODEL_ROOT_MOTION=true;
 
@@ -495,7 +496,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var scale=MODEL_NORMALIZED_SIZE/maxDim;
     var cfg=MODEL_CONFIGS[idx]||{};
     var rotY=(cfg.rotationY!==undefined)?cfg.rotationY:Math.PI;
-    var targetY=MODEL_BASE_Y+(cfg.offsetY||0);
+    var targetY=MODEL_BASE_Y+(cfg.offsetY||0)+MODEL_EXTRA_OFFSET_Y;
 
     root.scale.setScalar(scale);
     root.rotation.y=rotY;

@@ -329,8 +329,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
 
-  var MODEL_NORMALIZED_SIZE=2.45;
+  // 2.45 × 1.3 = 3.185：所有 GLB 統一放大 30%
+  var MODEL_NORMALIZED_SIZE=3.185;
   var MODEL_BASE_Y=0.0;
+  // 鎖定 GLB root transform，避免節點 2 因 root animation 或每幀浮動造成位置飄移
+  var LOCK_MODEL_ROOT_MOTION=true;
 
   function getContainer(){return document.getElementById('three-layer');}
   function hasModelForRole(idx){return !!MODEL_CONFIGS[idx];}
@@ -506,6 +509,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     root.userData.baseY=root.position.y;
     root.userData.baseRotationY=root.rotation.y;
+    root.userData.basePosition=root.position.clone();
+    root.userData.baseRotation=root.rotation.clone();
     root.userData.roleIndex=idx;
     root.userData.modelState=state;
     root.userData.center=center.clone();
@@ -649,10 +654,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     if(!renderer||!scene||!camera||!clock)return;
     var dt=clock.getDelta();
     Object.keys(mixers).forEach(function(k){mixers[k].update(dt);});
-    if(activeRoot){
-      var t=performance.now()*0.001;
-      activeRoot.rotation.y=(activeRoot.userData.baseRotationY||0)+Math.sin(t*0.35)*0.04;
-      activeRoot.position.y=(activeRoot.userData.baseY||MODEL_BASE_Y)+Math.sin(t*1.1)*0.025;
+    if(activeRoot&&LOCK_MODEL_ROOT_MOTION){
+      // Keep the model anchored.
+      // The previous version added sin() to rotation.y and position.y every frame,
+      // which made Node 2 look like it was drifting / moving around.
+      if(activeRoot.userData.basePosition)activeRoot.position.copy(activeRoot.userData.basePosition);
+      if(activeRoot.userData.baseRotation)activeRoot.rotation.copy(activeRoot.userData.baseRotation);
     }
     renderer.render(scene,camera);
   }

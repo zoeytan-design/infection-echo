@@ -295,31 +295,29 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 (function(){
   var container=null,renderer=null,scene=null,camera=null,loader=null,clock=null,rafId=null;
   var initialized=false,roleIndex=null,currentState='idle';
-  var models={},mixers={},visibleModel=null;
+  var modelCache={},mixers={},activeRoot=null,loadingKeys={};
 
   // Node 1 uses Girl models, Node 2 uses Boy models, Node 3 currently has no 3D model.
-  // Each role keeps its own cached GLB set so switching roles will not reuse the wrong model.
+  // IMPORTANT: paths are case-sensitive on GitHub Pages.
   var MODEL_CONFIGS={
     0:{
       idle:'assets/Girl_Idle.glb',
       listening:'assets/Girl_Listening_L.glb',
       thinking:'assets/Girl_Thinking.glb',
-      speaking:'assets/Girl_Idle.glb'
+      speaking:'assets/Girl_Idle.glb',
+      rotationY:Math.PI
     },
     1:{
       idle:'assets/Boy_Idle.glb',
       listening:'assets/Boy_Listening_R.glb',
       thinking:'assets/Boy_Thinking.glb',
-      speaking:'assets/Boy_Idle.glb'
+      speaking:'assets/Boy_Idle.glb',
+      rotationY:Math.PI
     }
   };
   var STATE_TO_MODEL={idle:'idle',listening:'listening',thinking:'thinking',speaking:'idle'};
 
-  // The current GLB set is authored facing away from the camera in this layout, so rotate it 180° to face forward.
-  var MODEL_BASE_ROTATION_Y=Math.PI;
-  // Shared display tuning for Node 1 and Node 2.
   var MODEL_NORMALIZED_SIZE=3.2;
-  // Moved down from 0.55 to 0.35 so both characters sit lower in the frame.
   var MODEL_BASE_Y=0.35;
 
   function getContainer(){return document.getElementById('three-layer');}
@@ -368,7 +366,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     camera.updateProjectionMatrix();
   }
 
-  function normalizeModel(root){
+  function normalizeModel(root,idx,state){
     var box=new THREE.Box3().setFromObject(root);
     var size=new THREE.Vector3();
     var center=new THREE.Vector3();
@@ -379,26 +377,46 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     var scale=MODEL_NORMALIZED_SIZE/maxDim;
     root.scale.setScalar(scale);
     root.position.y=MODEL_BASE_Y;
+    root.rotation.y=(MODEL_CONFIGS[idx]&&MODEL_CONFIGS[idx].rotationY!==undefined)?MODEL_CONFIGS[idx].rotationY:Math.PI;
+    root.userData.baseY=MODEL_BASE_Y;
+    root.userData.baseRotationY=root.rotation.y;
+    root.userData.roleIndex=idx;
+    root.userData.modelState=state;
     root.traverse(function(obj){
       if(obj.isMesh){
         obj.frustumCulled=false;
-        if(obj.material){
-          obj.material.needsUpdate=true;
-        }
+        if(obj.material)obj.material.needsUpdate=true;
       }
     });
   }
 
+  function removeActiveModel(){
+    if(activeRoot&&activeRoot.parent){
+      activeRoot.parent.remove(activeRoot);
+    }
+    activeRoot=null;
+  }
+
+  function removeAllModelRootsFromScene(){
+    Object.keys(modelCache).forEach(function(k){
+      var root=modelCache[k]&&modelCache[k].root;
+      if(root&&root.parent)root.parent.remove(root);
+      if(root)root.visible=false;
+    });
+    activeRoot=null;
+  }
+
   function loadModel(idx,state,path){
     var key=roleKey(idx,state);
-    if(models[key])return;
+    if(modelCache[key]||loadingKeys[key])return;
+    loadingKeys[key]=true;
     loader.load(path,function(gltf){
       var root=gltf.scene;
       root.name='IE3D_'+key;
-      normalizeModel(root);
+      normalizeModel(root,idx,state);
       root.visible=false;
-      scene.add(root);
-      models[key]=root;
+      modelCache[key]={root:root,path:path,idx:idx,state:state};
+
       if(gltf.animations&&gltf.animations.length){
         var mixer=new THREE.AnimationMixer(root);
         gltf.animations.forEach(function(clip){
@@ -408,9 +426,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         });
         mixers[key]=mixer;
       }
-      applyState(currentState);
+      delete loadingKeys[key];
       console.log('[IE3D] loaded',key,path);
+      applyState(currentState,true);
     },undefined,function(err){
+      delete loadingKeys[key];
       console.warn('[IE3D] GLB load failed:',path,err&&err.message?err.message:err);
     });
   }
@@ -423,21 +443,34 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     loadModel(idx,'thinking',cfg.thinking);
   }
 
-  function hideAllModels(){
-    Object.keys(models).forEach(function(k){models[k].visible=false;});
-    visibleModel=null;
-  }
-
-  function applyState(state){
+  function applyState(state,fromLoader){
     currentState=state||'idle';
     if(!hasModelForRole(roleIndex)){
-      hideAllModels();
+      removeAllModelRootsFromScene();
       return;
     }
     var modelState=STATE_TO_MODEL[currentState]||'idle';
     var activeKey=roleKey(roleIndex,modelState);
-    Object.keys(models).forEach(function(k){models[k].visible=(k===activeKey);});
-    visibleModel=models[activeKey]||null;
+    var data=modelCache[activeKey];
+
+    // Critical fix: only one GLB root may exist in the scene at any time.
+    // This prevents Node 1 idle/listening overlap and prevents Node 2 from showing a stale Girl model.
+    Object.keys(modelCache).forEach(function(k){
+      var r=modelCache[k]&&modelCache[k].root;
+      if(r&&r.parent)r.parent.remove(r);
+      if(r)r.visible=false;
+    });
+    activeRoot=null;
+
+    if(data&&data.root){
+      data.root.visible=true;
+      scene.add(data.root);
+      activeRoot=data.root;
+      console.log('[IE3D] active model',activeKey,data.path,'state=',currentState);
+    }else if(!fromLoader){
+      loadRoleModels(roleIndex);
+      console.log('[IE3D] waiting for model',activeKey,'state=',currentState);
+    }
   }
 
   function animate(){
@@ -445,10 +478,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     if(!renderer||!scene||!camera||!clock)return;
     var dt=clock.getDelta();
     Object.keys(mixers).forEach(function(k){mixers[k].update(dt);});
-    if(visibleModel){
+    if(activeRoot){
       var t=performance.now()*0.001;
-      visibleModel.rotation.y=MODEL_BASE_ROTATION_Y+Math.sin(t*0.35)*0.04;
-      visibleModel.position.y=MODEL_BASE_Y+Math.sin(t*1.1)*0.025;
+      activeRoot.rotation.y=(activeRoot.userData.baseRotationY||0)+Math.sin(t*0.35)*0.04;
+      activeRoot.position.y=(activeRoot.userData.baseY||MODEL_BASE_Y)+Math.sin(t*1.1)*0.025;
     }
     renderer.render(scene,camera);
   }
@@ -459,12 +492,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     if(!container)return;
     if(!hasModelForRole(idx)){
       container.style.display='none';
-      hideAllModels();
+      removeAllModelRootsFromScene();
       return;
     }
     container.style.display='block';
     ensureScene();
     resize();
+    removeAllModelRootsFromScene();
     loadRoleModels(idx);
     applyState('idle');
   }
@@ -483,7 +517,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     currentState='idle';
     container=getContainer();
     if(container)container.style.display='none';
-    hideAllModels();
+    removeAllModelRootsFromScene();
   }
 
   window.IE3D={init:init,setState:setState,destroy:destroy};

@@ -678,8 +678,16 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       return;
     }
 
-    // PDF 用 SphereGeometry(0.3, 16, 16)
-    var geo=new THREE.SphereGeometry(0.3,16,16);
+    // normalizeModel 把整個 root 縮放了 normalizedScale 倍
+    // head bone 是 assetRoot 的子孫，所以 local space 的 1 unit
+    // 在世界裡只有 1/normalizedScale 大
+    // 要讓嘴巴在世界空間看起來是 0.3 單位，
+    // 就必須在 local space 用 0.3 / normalizedScale 來補償
+    var nScale=root.userData.normalizedScale||1;
+    var mouthWorldSize=0.3; // 目標世界大小（可調整）
+    var localSize=mouthWorldSize/nScale;
+
+    var geo=new THREE.SphereGeometry(localSize,16,16);
     var mat=new THREE.MeshBasicMaterial({
       color:mc.color||0xcc2222,
       transparent:true,
@@ -691,21 +699,28 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     mouth.name='IE3D_Mouth_'+idx;
     mouth.frustumCulled=false;
 
-    // PDF 的位置：[0, 0.1, -0.3]（local space of headBone）
-    var p=mc.pos||[0,0.1,-0.3];
-    mouth.position.set(p[0],p[1],p[2]);
+    // pos 也要用 local space 換算
+    // PDF 預設 [0, 0.1, -0.3] 是世界單位，換算成 local
+    var pw=mc.pos||[0,0.1,-0.3];
+    var lx=pw[0]/nScale;
+    var ly=pw[1]/nScale;
+    var lz=pw[2]/nScale;
+    mouth.position.set(lx,ly,lz);
 
-    // 閉嘴初始 scale.y（PDF 用 0.3）
+    // 初始閉嘴
     mouth.scale.set(1,0.3,1);
 
-    // PDF：headBone.add(mouth) — local space，跟著頭部動畫走
     headBone.add(mouth);
 
     root.userData.mouth=mouth;
     root.userData.headBone=headBone;
+    root.userData.mouthNScale=nScale;
 
     console.log('[IE3D Mouth] created role',idx,
-      'bone:',headBone.name,'pos:',p);
+      'bone:',headBone.name,
+      'nScale:',nScale.toFixed(4),
+      'localSize:',localSize.toFixed(4),
+      'localPos:',lx.toFixed(3),ly.toFixed(3),lz.toFixed(3));
   }
 
   // PDF animate 邏輯：speaking → scale.y 上下開合；其他 → scale.y = 0.3

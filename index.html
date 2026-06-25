@@ -992,7 +992,7 @@ var db=null,openaiKey='',elevenKey='';
 var activeChar=null,activeNodeIdx=null,charsData={};
 var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
 var voiceCache={},voiceList=[],voiceListLoaded=false,voiceListPromise=null;
-var currentAudio=null,currentAudioUrl=null;
+var currentAudio=null,currentAudioUrl=null,currentAudioWatchdog=null,currentSpeakToken=0;
 var localDeviceId=gk('ie_device_id')||('dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8));
 sk('ie_device_id',localDeviceId);
 var localRoleIdx=null;
@@ -1180,7 +1180,7 @@ function setBubbleText(text,state){
   var el=document.getElementById('ai-bubble-text');if(!el)return;
   el.classList.remove('empty','thinking','speaking');if(state)el.classList.add(state);el.textContent=text||'';
 }
-function setModelState(s){modelState=s;}
+function setModelState(s){modelState=s||'idle';}
 var pending3DInitTimer=null;
 var pending3DState='idle';
 function init3DForRole(idx){
@@ -1208,6 +1208,7 @@ function init3DForRole(idx){
 }
 function set3DState(state){
   pending3DState=state||'idle';
+  setModelState(pending3DState);
   if(window.IE3D&&typeof window.IE3D.setState==='function')window.IE3D.setState(pending3DState);
 }
 function getListening3DState(sourceSpeaker){
@@ -1223,6 +1224,7 @@ function set3DListeningFrom(sourceSpeaker){
 function destroy3DLayer(){
   if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
   pending3DState='idle';
+  setModelState('idle');
   if(window.IE3D&&typeof window.IE3D.destroy==='function')window.IE3D.destroy();
 }
 
@@ -1441,7 +1443,7 @@ function onFaceResults(results){
 
   if(isRec)return;
   if(isSubmitting)return;
-  if(modelState==='speaking')return;
+  if(modelState!=='idle')return;
 
   if(!bothEyesVisible){
     faceDetectedStart=null;
@@ -1833,8 +1835,9 @@ async function advanceAfterSpeaking(session){
   // 用 transaction 確保只有一個裝置能推進這個 step，防止多節點同時輸出
   var advanceLockRef=db.ref('infectionLocks/'+session.cycleId+'/advance_'+session.step);
   var lockResult=await advanceLockRef.transaction(function(cur){
-    if(cur)return; // 已有人拿到鎖，放棄
-    return {deviceId:localDeviceId,lockedAt:Date.now()};
+    var now=Date.now();
+    if(cur&&cur.lockedAt&&now-cur.lockedAt<15000)return; // 已有人剛拿到鎖，放棄
+    return {deviceId:localDeviceId,lockedAt:now};
   }).catch(function(e){console.warn('advanceLock failed',e);return {committed:false};});
 
   if(!lockResult.committed)return; // 其他節點已經在推進，退出
@@ -1913,6 +1916,7 @@ async function tryAdvanceFromWaiting(cycleId,finishedStep){
     sourceSpeaker:prep.sourceSpeaker,
     startedBy:session.startedBy,
     incomingMessage:prep.incomingMessage,
+    userOriginalMessage:prep.userOriginalMessage||session.userOriginalMessage||session.incomingMessage||'',
     spokenText:prep.spokenText,
     speakingStartedAt:Date.now(),
     updatedAt:Date.now(),
@@ -2167,10 +2171,30 @@ function speakSessionText(session){
   });
 }
 
+function clearCurrentAudioOnly(){
+  if(currentAudioWatchdog){
+    clearTimeout(currentAudioWatchdog);
+    currentAudioWatchdog=null;
+  }
+  if(currentAudio){
+    try{
+      currentAudio.onended=null;
+      currentAudio.onerror=null;
+      currentAudio.pause();
+      currentAudio.currentTime=0;
+    }catch(e){}
+    currentAudio=null;
+  }
+  if(currentAudioUrl){
+    try{URL.revokeObjectURL(currentAudioUrl);}catch(e){}
+    currentAudioUrl=null;
+  }
+}
+
 function stopSpeaking(){
-  if(currentAudio){try{currentAudio.pause();currentAudio.currentTime=0;}catch(e){}currentAudio=null;}
-  if(currentAudioUrl){try{URL.revokeObjectURL(currentAudioUrl);}catch(e){}currentAudioUrl=null;}
-  if(speechSynthesis.speaking)speechSynthesis.cancel();
+  currentSpeakToken++;
+  clearCurrentAudioOnly();
+  try{speechSynthesis.cancel();}catch(e){}
   document.getElementById('swave').classList.remove('on');
   setVIdle();
   setModelState('idle');
@@ -2205,22 +2229,115 @@ function preloadPublishedVoices(data){
 }
 async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
   if(!text){if(onDone)onDone();return;}
-  if(!elevenKey){fallbackSpeak(text,onDone);return;}
-  var vid=await getVoiceId(voiceName);if(!vid){console.warn('Voice not found:',voiceName);fallbackSpeak(text,onDone);return;}
+
+  var speakToken=++currentSpeakToken;
+  clearCurrentAudioOnly();
+  try{speechSynthesis.cancel();}catch(e){}
+
+  function isCurrentSpeech(){
+    return speakToken===currentSpeakToken;
+  }
+
+  function finishSpeech(){
+    if(!isCurrentSpeech())return;
+    clearCurrentAudioOnly();
+    if(onDone)onDone();
+  }
+
+  function runFallback(){
+    if(!isCurrentSpeech())return;
+    clearCurrentAudioOnly();
+    fallbackSpeak(text,function(){
+      finishSpeech();
+    },speakToken);
+  }
+
+  if(!elevenKey){runFallback();return;}
+
+  var vid=await getVoiceId(voiceName);
+  if(!isCurrentSpeech())return;
+  if(!vid){console.warn('Voice not found:',voiceName);runFallback();return;}
+
   try{
-    var resp=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid+'/stream',{method:'POST',headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},body:JSON.stringify({text:text,model_id:'eleven_multilingual_v2',voice_settings:{stability:stability||0.4,similarity_boost:similarity||0.75,speed:Math.min(1.2,Math.max(0.7,rate||1.0))}})});
-    if(!resp.ok){var e=await resp.json();throw new Error(JSON.stringify(e.detail||e));}
-    var blob=await resp.blob();var url=URL.createObjectURL(blob);currentAudioUrl=url;currentAudio=new Audio(url);
-    var _audioDone=false;
-    function _finishAudio(){if(_audioDone)return;_audioDone=true;try{URL.revokeObjectURL(url);}catch(e){}currentAudio=null;currentAudioUrl=null;if(onDone)onDone();}
-    currentAudio.onended=_finishAudio;
-    currentAudio.onerror=function(){try{URL.revokeObjectURL(url);}catch(e){}currentAudio=null;currentAudioUrl=null;fallbackSpeak(text,onDone);};
-    currentAudio.play().catch(function(err){console.warn('Audio play failed:',err);fallbackSpeak(text,onDone);});
-    var _estMs=Math.max(4000,text.length*130);
-    setTimeout(function(){if(!_audioDone){console.warn('[elevenSpeak] timeout fallback');_finishAudio();}},_estMs);
-  }catch(err){console.warn('ElevenLabs error:',err.message);fallbackSpeak(text,onDone);}
+    var resp=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid+'/stream',{
+      method:'POST',
+      headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        text:text,
+        model_id:'eleven_multilingual_v2',
+        voice_settings:{
+          stability:stability||0.4,
+          similarity_boost:similarity||0.75,
+          speed:Math.min(1.2,Math.max(0.7,rate||1.0))
+        }
+      })
+    });
+
+    if(!isCurrentSpeech())return;
+
+    if(!resp.ok){
+      var e=await resp.json();
+      throw new Error(JSON.stringify(e.detail||e));
+    }
+
+    var blob=await resp.blob();
+    if(!isCurrentSpeech())return;
+
+    var url=URL.createObjectURL(blob);
+    currentAudioUrl=url;
+    currentAudio=new Audio(url);
+
+    currentAudio.onended=function(){
+      finishSpeech();
+    };
+
+    currentAudio.onerror=function(){
+      if(!isCurrentSpeech())return;
+      console.warn('[elevenSpeak] audio error, using fallback');
+      runFallback();
+    };
+
+    currentAudio.play().catch(function(err){
+      if(!isCurrentSpeech())return;
+      console.warn('Audio play failed:',err);
+      runFallback();
+    });
+
+    // 只做極端保護，不再用 text.length 估算語音長度。
+    // 這樣 B/C 不會因為估算時間太短而在 A 還沒講完時提前開始。
+    currentAudioWatchdog=setTimeout(function(){
+      if(!isCurrentSpeech())return;
+      if(currentAudio&&currentAudio.ended){
+        finishSpeech();
+      }else{
+        console.warn('[elevenSpeak] audio watchdog checked: audio still playing, not advancing');
+      }
+    },90000);
+
+  }catch(err){
+    if(!isCurrentSpeech())return;
+    console.warn('ElevenLabs error:',err.message);
+    runFallback();
+  }
 }
-function fallbackSpeak(text,onDone){var u=new SpeechSynthesisUtterance(text);u.lang='zh-TW';u.onend=onDone;u.onerror=onDone;speechSynthesis.speak(u);}
+
+function fallbackSpeak(text,onDone,speakToken){
+  try{speechSynthesis.cancel();}catch(e){}
+  var done=false;
+
+  function finish(){
+    if(done)return;
+    done=true;
+    if(speakToken!==undefined&&speakToken!==currentSpeakToken)return;
+    if(onDone)onDone();
+  }
+
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang='zh-TW';
+  u.onend=finish;
+  u.onerror=finish;
+  speechSynthesis.speak(u);
+}
 
 async function testElevenLabs(){
   if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}showNotif('測試中...');

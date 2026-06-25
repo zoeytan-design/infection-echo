@@ -381,8 +381,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       offsetX:0,
       offsetY:-0.35,
       offsetZ:0,
-      // 節點3 facingY=0，模型正面朝 +Z，所以嘴巴 pos z 用正值
-      // 若嘴巴出現在後腦，把 0.22 改成 -0.22
       mouth:{
         enabled:true,
         pos:[0,0.08,0.22],
@@ -668,14 +666,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     return root;
   }
 
-  // ── MOUTH SYSTEM（PDF 方案）─────────────────────────────────────────
-  // 完全依照 PDF 邏輯：
-  //   1. traverse 找名稱為 "head" 的 bone（不限 type）
-  //   2. SphereGeometry(0.3) 掛到 headBone local space
-  //   3. animate() 裡只改 mouth.scale.y
-  //
-  // Debug：Console 會印出所有 bone/node 名稱，讓你確認 GLB 結構
-
   function findHeadBone(assetRoot){
     var headBone=null;
     var allNames=[];
@@ -686,13 +676,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       var n=String(obj.name||'').toLowerCase();
       if(!headBone&&(
         n==='head'||
-        n.indexOf('head')>=0   // 寬鬆匹配：包含 head 字串的任何節點
+        n.indexOf('head')>=0
       )){
         headBone=obj;
       }
     });
 
-    // 永遠印出結果，方便確認 bone 名稱
     console.log('[IE3D Mouth] findHeadBone result:',
       headBone?headBone.name+'('+headBone.type+')':'NOT FOUND');
     console.log('[IE3D Mouth] all nodes:',allNames.join(' | '));
@@ -713,8 +702,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       return;
     }
 
-    // normalizeModel 把整個 root 縮放了 normalizedScale 倍。
-    // 嘴巴掛在 headBone local space，因此大小與位置都用 normalizedScale 補償。
     var nScale=root.userData.normalizedScale||1;
     var mouthWorldSize=0.018;
     var localSize=mouthWorldSize/nScale;
@@ -733,14 +720,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     mouth.frustumCulled=false;
     mouth.renderOrder=999;
 
-    // pos 也要用 local space 換算。
     var pw=mc.pos||[0,0.1,-0.3];
     var lx=pw[0]/nScale;
     var ly=pw[1]/nScale;
     var lz=pw[2]/nScale;
     mouth.position.set(lx,ly,lz);
 
-    // 初始是 idle 的呼吸感微動基準。真正動畫由 updateActiveMouth 控制。
     mouth.scale.set(1,0.28,0.75);
     mouth.userData.currentScale={x:1,y:0.28,z:0.75};
 
@@ -757,11 +742,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       'localPos:',lx.toFixed(3),ly.toFixed(3),lz.toFixed(3));
   }
 
-  // 嘴巴狀態只依 currentState 改變，不影響模型、排版、語音與 Firebase 流程。
-  // idle / 其他：呼吸感微動
-  // listening：輕微抿嘴
-  // thinking：微微開合，像自言自語
-  // speaking：情緒化大開合
   function updateActiveMouth(){
     if(!activeRoot||!activeRoot.userData||!activeRoot.userData.mouth)return;
     var mouth=activeRoot.userData.mouth;
@@ -804,12 +784,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     mouth.scale.set(cur.x,cur.y,cur.z);
     mouth.userData.currentScale=cur;
   }
-  // ── END MOUTH SYSTEM ─────────────────────────────────────────────
 
   function finishModelLoad(key,idx,state,path,gltf){
     var root=createRenderableRoot(key,idx,state,gltf);
     normalizeModel(root,idx,state);
-    // 每一個狀態 GLB 都建立嘴巴，避免切換 idle / listening / thinking 時嘴巴消失。
     createMouthForRoot(root,idx);
     root.visible=false;
 
@@ -1316,12 +1294,29 @@ function startInterruptLoop(){
   loop();
 }
 
+// ── 打斷：立刻結束 Firebase 循環，讓所有節點停下 ──────────────────────
 function triggerInterrupt(){
   lastInterruptTime=Date.now();
   console.log('[Interrupt] triggered! stopping AI...');
   stopSpeaking();
   isSubmitting=false;
   faceDetectedStart=null;
+  localGeneratingKeys={};
+  localPreparingKeys={};
+  lastSpokenKey=null;
+
+  // 立刻把 Firebase session 結束，讓所有節點都停下來
+  if(db&&activeCycleId){
+    db.ref('infectionSession').update({
+      status:'ended',
+      endedReason:'interrupted',
+      updatedAt:Date.now()
+    });
+    db.ref('infectionPrepared/'+activeCycleId).remove();
+    db.ref('infectionLocks/'+activeCycleId).remove();
+  }
+  activeCycleId=null;
+
   setBubbleText('已打斷，重新聆聽中...','empty');
   set3DState('idle');
   document.getElementById('vtrans').textContent='打斷 — 重新說話';
@@ -1641,21 +1636,35 @@ function handleSessionUpdate(session){
     return;
   }
 
+  // ── ended：區分打斷結束 vs 正常結束 ───────────────────────────────
   if(session.status==='ended'){
     stopSpeaking();
     isSubmitting=false;
     faceDetectedStart=null;
+    localGeneratingKeys={};
+    localPreparingKeys={};
+    lastSpokenKey=null;
     setModelState('idle');
     set3DState('idle');
-    if(session.endedReason==='model_not_found'){
+
+    if(session.endedReason==='interrupted'){
+      // 被打斷結束：靜默等待，臉部偵測會自動重啟聆聽
+      setBubbleText('','empty');
+      document.getElementById('vtrans').textContent='等待偵測臉部...';
+      document.getElementById('vtrans').classList.remove('active');
+    }else if(session.endedReason==='model_not_found'){
       setBubbleText('AI 模型不可用，請檢查 API Key','empty');
+      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
+      document.getElementById('vtrans').classList.remove('active');
     }else if(localRoleIdx===session.currentSpeaker&&session.spokenText){
       setBubbleText(session.spokenText,'speaking');
+      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
+      document.getElementById('vtrans').classList.remove('active');
     }else{
       setBubbleText('循環結束','empty');
+      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
+      document.getElementById('vtrans').classList.remove('active');
     }
-    document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
-    document.getElementById('vtrans').classList.remove('active');
     return;
   }
 }
@@ -1820,6 +1829,17 @@ async function prepareNextResponse(session){
 
 async function advanceAfterSpeaking(session){
   if(!db||activeCycleId!==session.cycleId)return;
+
+  // 用 transaction 確保只有一個裝置能推進這個 step，防止多節點同時輸出
+  var advanceLockRef=db.ref('infectionLocks/'+session.cycleId+'/advance_'+session.step);
+  var lockResult=await advanceLockRef.transaction(function(cur){
+    if(cur)return; // 已有人拿到鎖，放棄
+    return {deviceId:localDeviceId,lockedAt:Date.now()};
+  }).catch(function(e){console.warn('advanceLock failed',e);return {committed:false};});
+
+  if(!lockResult.committed)return; // 其他節點已經在推進，退出
+
+  if(activeCycleId!==session.cycleId)return;
 
   var currentSnap=await db.ref('infectionSession').once('value');
   var current=currentSnap.val();
@@ -2135,7 +2155,10 @@ function speakSessionText(session){
   var v=(role&&role.voice)||{};
 
   elevenSpeak(session.spokenText||'',v.name||'ShanShan',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
+    // 音頻播完時再次確認：cycleId 沒被打斷、且 lastSpokenKey 還是這個 step
+    // 防止音頻播完前循環已被重置，還繼續推進步驟
     if(activeCycleId!==session.cycleId)return;
+    if(lastSpokenKey!==key)return;
     setVIdle();
     document.getElementById('swave').classList.remove('on');
     setModelState('idle');

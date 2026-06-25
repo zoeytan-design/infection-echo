@@ -678,13 +678,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       return;
     }
 
-    // normalizeModel 把整個 root 縮放了 normalizedScale 倍
-    // head bone 是 assetRoot 的子孫，所以 local space 的 1 unit
-    // 在世界裡只有 1/normalizedScale 大
-    // 要讓嘴巴在世界空間看起來是 0.3 單位，
-    // 就必須在 local space 用 0.3 / normalizedScale 來補償
+    // normalizeModel 把整個 root 縮放了 normalizedScale 倍。
+    // 嘴巴掛在 headBone local space，因此大小與位置都用 normalizedScale 補償。
     var nScale=root.userData.normalizedScale||1;
-    var mouthWorldSize=0.012; // 縮小 80%（原 0.06）
+    var mouthWorldSize=0.018;
     var localSize=mouthWorldSize/nScale;
 
     var geo=new THREE.SphereGeometry(localSize,16,16);
@@ -692,23 +689,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       color:mc.color||0xcc2222,
       transparent:true,
       opacity:0.92,
-      side:THREE.DoubleSide
+      side:THREE.DoubleSide,
+      depthTest:false
     });
 
     var mouth=new THREE.Mesh(geo,mat);
     mouth.name='IE3D_Mouth_'+idx;
     mouth.frustumCulled=false;
+    mouth.renderOrder=999;
 
-    // pos 也要用 local space 換算
-    // PDF 預設 [0, 0.1, -0.3] 是世界單位，換算成 local
+    // pos 也要用 local space 換算。
     var pw=mc.pos||[0,0.1,-0.3];
     var lx=pw[0]/nScale;
     var ly=pw[1]/nScale;
     var lz=pw[2]/nScale;
     mouth.position.set(lx,ly,lz);
 
-    // 初始閉嘴
-    mouth.scale.set(1,0.3,1);
+    // 初始是 idle 的呼吸感微動基準。真正動畫由 updateActiveMouth 控制。
+    mouth.scale.set(1,0.28,0.75);
+    mouth.userData.currentScale={x:1,y:0.28,z:0.75};
 
     headBone.add(mouth);
 
@@ -723,31 +722,60 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       'localPos:',lx.toFixed(3),ly.toFixed(3),lz.toFixed(3));
   }
 
-  // PDF animate 邏輯：speaking → scale.y 上下開合；其他 → scale.y = 0.3
+  // 嘴巴狀態只依 currentState 改變，不影響模型、排版、語音與 Firebase 流程。
+  // idle / 其他：呼吸感微動
+  // listening：輕微抿嘴
+  // thinking：微微開合，像自言自語
+  // speaking：情緒化大開合
   function updateActiveMouth(){
     if(!activeRoot||!activeRoot.userData||!activeRoot.userData.mouth)return;
     var mouth=activeRoot.userData.mouth;
+    var t=((typeof performance!=='undefined'&&performance.now)?performance.now():Date.now())*0.001;
+    var state=String(currentState||'idle');
+    var target={x:1,y:0.28,z:0.75};
+    var alpha=0.08;
 
-    if(currentState==='speaking'){
-      // 速度放慢 3 倍：0.02 → 0.0067
-      mouth.scale.y=1+Math.abs(Math.sin(Date.now()*0.0067))*1.5;
+    if(state==='speaking'){
+      var open=Math.pow(Math.abs(Math.sin(t*1.75)),0.72);
+      var emotion=0.82+Math.abs(Math.sin(t*0.43))*0.28;
+      target.x=1.02+open*0.12;
+      target.y=0.58+open*1.55*emotion;
+      target.z=0.78;
+      alpha=0.10;
+    }else if(state==='thinking'){
+      var mutter=(Math.sin(t*1.05)+1)*0.5;
+      target.x=0.90+mutter*0.05;
+      target.y=0.30+mutter*0.38;
+      target.z=0.70;
+      alpha=0.075;
+    }else if(state.indexOf('listening')===0){
+      var press=(Math.sin(t*0.72)+1)*0.5;
+      target.x=0.80+press*0.03;
+      target.y=0.16+press*0.035;
+      target.z=0.62;
+      alpha=0.065;
     }else{
-      mouth.scale.y=0.3;
+      var breathe=(Math.sin(t*0.62)+1)*0.5;
+      target.x=0.98+breathe*0.035;
+      target.y=0.24+breathe*0.075;
+      target.z=0.72+breathe*0.025;
+      alpha=0.055;
     }
+
+    var cur=mouth.userData.currentScale||{x:mouth.scale.x,y:mouth.scale.y,z:mouth.scale.z};
+    cur.x+=(target.x-cur.x)*alpha;
+    cur.y+=(target.y-cur.y)*alpha;
+    cur.z+=(target.z-cur.z)*alpha;
+    mouth.scale.set(cur.x,cur.y,cur.z);
+    mouth.userData.currentScale=cur;
   }
   // ── END MOUTH SYSTEM ─────────────────────────────────────────────
 
   function finishModelLoad(key,idx,state,path,gltf){
     var root=createRenderableRoot(key,idx,state,gltf);
     normalizeModel(root,idx,state);
-    // 嘴巴只需要在「實際使用 idle GLB」的 root 上建立
-    // speaking 和 idle 用同一個 GLB 路徑，兩者都要建嘴巴
-    // 用 cfg.idle 比對路徑，確保所有重用 idle GLB 的 state 都有嘴巴
-    var cfg2=MODEL_CONFIGS[idx]||{};
-    var isIdleGlb=(cfg2.idle&&path&&
-      path.replace(/^\.?\//,'').toLowerCase()===
-      cfg2.idle.replace(/^\.?\//,'').toLowerCase());
-    if(isIdleGlb)createMouthForRoot(root,idx);
+    // 每一個狀態 GLB 都建立嘴巴，避免切換 idle / listening / thinking 時嘴巴消失。
+    createMouthForRoot(root,idx);
     root.visible=false;
 
     modelCache[key]={

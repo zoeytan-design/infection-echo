@@ -1238,8 +1238,7 @@ var LISTEN_DURATION_MS=8000;
 
 var INTERRUPT_RMS_THRESHOLD=0.02;
 var INTERRUPT_HOLD_MS=200;
-// 打斷冷卻時間：一次打斷成功後，20 秒內不允許再次觸發打斷
-var INTERRUPT_COOLDOWN_MS=20000;
+var INTERRUPT_COOLDOWN_MS=1000;
 var INTERRUPT_EYE_VALID_MS=500;
 
 var interruptAudioCtx=null;
@@ -1248,18 +1247,8 @@ var interruptMicStream=null;
 var interruptRaf=null;
 var voiceStartTime=null;
 var lastInterruptTime=0;
-var interruptCooldownUntil=0;
 var interruptEyesVisible=false;
 var lastInterruptEyesAt=0;
-
-function isInterruptCoolingDown(){
-  return Date.now()<interruptCooldownUntil;
-}
-
-function clearInterruptDetectionHold(){
-  voiceStartTime=null;
-  faceDetectedStart=null;
-}
 
 function initInterruptDetection(){
   if(interruptAudioCtx)return;
@@ -1283,19 +1272,11 @@ function startInterruptLoop(){
   var buf=new Float32Array(interruptAnalyser.fftSize);
   function loop(){
     interruptRaf=requestAnimationFrame(loop);
-
-    if(modelState!=='speaking'){
-      clearInterruptDetectionHold();
-      return;
-    }
-
-    if(isInterruptCoolingDown()){
-      clearInterruptDetectionHold();
-      return;
-    }
+    if(modelState!=='speaking'){voiceStartTime=null;return;}
+    if(Date.now()-lastInterruptTime<INTERRUPT_COOLDOWN_MS){return;}
 
     var eyesFresh=interruptEyesVisible&&(Date.now()-lastInterruptEyesAt<INTERRUPT_EYE_VALID_MS);
-    if(!eyesFresh){clearInterruptDetectionHold();return;}
+    if(!eyesFresh){voiceStartTime=null;return;}
 
     interruptAnalyser.getFloatTimeDomainData(buf);
     var rms=0;
@@ -1317,21 +1298,11 @@ function startInterruptLoop(){
 
 // ── 打斷：立刻結束 Firebase 循環，讓所有節點停下 ──────────────────────
 function triggerInterrupt(){
-  var now=Date.now();
-
-  // 防止同一段聲音 / 同一次偵測在短時間內連續觸發
-  if(now<interruptCooldownUntil){
-    console.log('[Interrupt] ignored: cooldown '+Math.ceil((interruptCooldownUntil-now)/1000)+'s remaining');
-    clearInterruptDetectionHold();
-    return;
-  }
-
-  lastInterruptTime=now;
-  interruptCooldownUntil=now+INTERRUPT_COOLDOWN_MS;
-  console.log('[Interrupt] triggered! stopping AI. cooldown until '+new Date(interruptCooldownUntil).toLocaleTimeString());
+  lastInterruptTime=Date.now();
+  console.log('[Interrupt] triggered! stopping AI...');
   stopSpeaking();
   isSubmitting=false;
-  clearInterruptDetectionHold();
+  faceDetectedStart=null;
   localGeneratingKeys={};
   localPreparingKeys={};
   lastSpokenKey=null;
@@ -1469,11 +1440,6 @@ function onFaceResults(results){
   if(!activeChar||localRoleIdx===null)return;
 
   var bothEyesVisible=updateInterruptEyeState(results);
-
-  if(isInterruptCoolingDown()){
-    faceDetectedStart=null;
-    return;
-  }
 
   if(isRec)return;
   if(isSubmitting)return;

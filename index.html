@@ -160,8 +160,16 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <button class="ctab" onclick="switchTab(2)">節點 3</button>
   </div>
   <div class="cpanel on card" id="cpanel-0">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-0" value="焦慮者"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-0" value="😟" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-0" rows="3">這個角色總是感到不安，習慣把任何訊息解讀成潛在的威脅。說話時充滿假設性語氣，語氣緊張，句子簡短，偶爾反問。用繁體中文回應。</textarea></div></div>
+    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-0" value="林雨晴"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-0" value="😏" style="text-align:center;"/></div></div>
+    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-0" rows="3">你是「林雨晴」，一個常在社群平台留言的女性使用者。
+
+你的個性不是直接攻擊型，而是比較會說風涼話、旁觀式酸人、輕微懷疑事情的人。你看到事件時，不會每次都立刻說「這很可疑」或「一定有問題」，而是先像普通網友一樣回應，再用一點冷淡、酸、無奈或半開玩笑的語氣，讓事情聽起來有點尷尬、有點不單純，或讓當事人看起來有點可笑。
+
+你比較常用的語氣是：「嗯……只能說不意外」、「也不是第一次看到這種操作了」、「看起來好像沒什麼，但懂的人就懂」、「我不知道是不是我太敏感啦，但這種感覺真的不太好」。
+
+你的反應要根據使用者輸入自然變化，不要每次都直接懷疑，不要每次都把事情講得很嚴重。你只是比較容易用風涼話、酸話、輕微負面解讀去回應。
+
+請用繁體中文回應。每次回應控制在 1 到 3 句。不要說自己是 AI，不要解釋規則，不要像旁白，只要像一個真實網友在留言。</textarea></div></div>
     <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-0"></div>
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
     <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="3" id="c-distort-0" oninput="document.getElementById('dv-0').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-0">3</span></div>
@@ -179,8 +187,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
 <option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
 <option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
-    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.15" id="c-rate-0" oninput="document.getElementById('rv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-0">1.15</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性（低=情緒起伏大）</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.35" id="c-stab-0" oninput="document.getElementById('sv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-0">0.35</span></div></div></div>
+    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.05" id="c-rate-0" oninput="document.getElementById('rv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-0">1.05</span></div></div></div>
+    <div class="frow s"><div class="f"><label>穩定性（低=情緒起伏大）</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.45" id="c-stab-0" oninput="document.getElementById('sv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-0">0.45</span></div></div></div>
     <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-0" oninput="document.getElementById('smv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-0">0.75</span></div></div></div>
     <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
     <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-0"><option value="anxiety">焦慮紫</option><option value="anger">憤怒紅</option><option value="conspiracy">陰謀藍</option><option value="poetic">詩意金</option><option value="cold">冷漠灰</option></select></div></div>
@@ -188,8 +196,18 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <button class="btn-p" id="save-0" onclick="saveChar(0)" disabled>▶ 發布節點 1</button>
   </div>
   <div class="cpanel card" id="cpanel-1">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-1" value="煽動者"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-1" value="😤" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-1" rows="3">這個角色熱衷於激化任何話題，總是把事情推向對立面。說話直接，充滿情緒，喜歡用強烈的措辭和感嘆。用繁體中文回應。</textarea></div></div>
+    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-1" value="陳柏宇"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-1" value="😤" style="text-align:center;"/></div></div>
+    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-1" rows="3">你是「陳柏宇」，一個在社群平台上很有立場、很容易快速判斷事件對錯的男性使用者。
+
+你不是每次都直接暴怒，也不是只會罵人。你的特點是：看到事情時，會很快判斷誰比較有問題，並且容易把討論推向「是不是有人雙標」、「是不是有人在裝」、「是不是大家太好騙」這種方向。
+
+你的語氣直接、有點急、不太有耐心，但要像真實網友，不要像刻意煽動的角色。你可以質疑、反問、帶情緒，但不要每次都用最激烈的語氣。大部分時候，你是用很篤定的口吻，把原本中性的事情推向更有爭議的解讀。
+
+你比較常用的語氣是：「這還看不出來嗎」、「重點根本不是這個吧」、「不要再幫他們找理由了」、「大家真的太容易被帶過去了」。
+
+你的反應要根據使用者輸入自然變化，不要每次都直接憤怒，不要每次都要求別人表態。你只是比較容易把事情看成對立、責任和立場問題。
+
+請用繁體中文回應。每次回應控制在 1 到 3 句。不要說自己是 AI，不要解釋規則，不要像旁白，只要像一個真實網友在留言。</textarea></div></div>
     <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-1"></div>
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
     <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="4" id="c-distort-1" oninput="document.getElementById('dv-1').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-1">4</span></div>
@@ -206,20 +224,30 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
 <option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
 <option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
-    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.1" id="c-rate-1" oninput="document.getElementById('rv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-1">1.10</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.25" id="c-stab-1" oninput="document.getElementById('sv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-1">0.25</span></div></div></div>
-    <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.8" id="c-sim-1" oninput="document.getElementById('smv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-1">0.80</span></div></div></div>
+    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="1.10" id="c-rate-1" oninput="document.getElementById('rv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-1">1.10</span></div></div></div>
+    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.35" id="c-stab-1" oninput="document.getElementById('sv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-1">0.35</span></div></div></div>
+    <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.80" id="c-sim-1" oninput="document.getElementById('smv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-1">0.80</span></div></div></div>
     <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
     <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-1"><option value="anger">憤怒紅</option><option value="anxiety">焦慮紫</option><option value="conspiracy">陰謀藍</option><option value="poetic">詩意金</option><option value="cold">冷漠灰</option></select></div></div>
     <button class="prev-btn" onclick="previewVoice(1)">▶ 試聽語音</button>
     <button class="btn-p" id="save-1" onclick="saveChar(1)" disabled>▶ 發布節點 2</button>
   </div>
   <div class="cpanel card" id="cpanel-2">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-2" value="陰謀者"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-2" value="🕵️" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-2" rows="3">這個角色相信一切都有隱藏的目的，總是把普通事件解讀成更大陰謀的一部分。說話神秘，充滿暗示，喜歡用「你有沒有想過...」。用繁體中文回應。</textarea></div></div>
+    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-2" value="沈立安"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-2" value="😏" style="text-align:center;"/></div></div>
+    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-2" rows="3">你是「沈立安」，一個在社群平台上說話陰陽怪氣、冷嘲熱諷，並且很容易從事件中看出背後操作的人。
+
+你不是每次都直接說「這是陰謀」，也不要每次都講得像神秘預言。你的特點是：表面上像是在冷靜評論，但語氣裡帶著懷疑、諷刺和「你們真的都信喔？」的感覺。你會把事件中的時間點、措辭、沉默、回應方式或輿論走向，解讀成可能有人在轉移焦點、測試反應、控制風向或包裝真相。
+
+你的語氣低調、陰陽怪氣、帶一點冷笑感。你不需要大聲攻擊別人，而是用暗示、反問和諷刺讓事情聽起來更不單純。
+
+你比較常用的語氣是：「喔，剛好又是這個時間點」、「表面上看起來是這樣啦」、「大家真的都很相信這套說法」、「真正有趣的是，他們選擇不講的那部分」。
+
+你的反應要根據使用者輸入自然變化，不要每次都直接陰謀論，不要每次都說背後有人操控。你只是比較容易用陰陽怪氣的方式，把事情往不單純的方向暗示。
+
+請用繁體中文回應。每次回應控制在 1 到 3 句。不要說自己是 AI，不要解釋規則，不要像旁白，只要像一個真實網友在留言。</textarea></div></div>
     <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-2"></div>
     <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
-    <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="4" id="c-distort-2" oninput="document.getElementById('dv-2').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-2">4</span></div>
+    <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="5" id="c-distort-2" oninput="document.getElementById('dv-2').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-2">5</span></div>
     <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
     <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-2"><option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲（推薦陰謀者）</option>
 <option value="Hardy">Hardy — 男聲</option>
@@ -234,7 +262,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
 <option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option></select></div></div>
     <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="0.85" id="c-rate-2" oninput="document.getElementById('rv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-2">0.85</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.55" id="c-stab-2" oninput="document.getElementById('sv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-2">0.55</span></div></div></div>
+    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.60" id="c-stab-2" oninput="document.getElementById('sv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-2">0.60</span></div></div></div>
     <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-2" oninput="document.getElementById('smv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-2">0.75</span></div></div></div>
     <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
     <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-2"><option value="conspiracy">陰謀藍</option><option value="anxiety">焦慮紫</option><option value="anger">憤怒紅</option><option value="poetic">詩意金</option><option value="cold">冷漠灰</option></select></div></div>
@@ -971,7 +999,7 @@ var OPENAI_MODEL='gpt-4.1-mini';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
-var selTraits=[['焦慮'],['煽動','憤怒'],['陰謀論','懷疑']];
+var selTraits=[['八卦','懷疑','悲觀'],['煽動','憤怒','審判'],['陰謀論','懷疑','冷漠']];
 var RC=['c1','c2','c3'];
 var CHAT_BG_FILES=['bg.jpg','bg.jpg','bg.jpg'];
 

@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
 <style>
@@ -15,18 +16,6 @@
 html,body{height:100%;width:100%;background:var(--bg);color:var(--text);font-family:var(--mono);overflow:hidden;}
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 20% 80%,rgba(100,30,180,0.08) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 80% 20%,rgba(0,180,150,0.05) 0%,transparent 55%);pointer-events:none;z-index:0;}
 .scanline{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:0;}
-#key-overlay{position:fixed;inset:0;z-index:9999;background:rgba(5,5,8,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
-#key-overlay.hidden{display:none;}
-.key-box{max-width:440px;width:100%;text-align:center;}
-.key-logo{font-family:var(--serif);font-size:28px;color:#e0d8ff;margin-bottom:6px;}
-.key-sub{font-size:10px;color:#333355;letter-spacing:0.3em;margin-bottom:32px;}
-.key-field{margin-bottom:10px;text-align:left;}
-.key-field label{display:block;font-size:10px;color:#5555aa;letter-spacing:0.12em;margin-bottom:5px;}
-.key-input{width:100%;background:rgba(255,255,255,0.04);border:0.5px solid rgba(155,109,255,0.3);border-radius:8px;color:#ddd;font-family:var(--mono);font-size:12px;padding:10px 14px;outline:none;}
-.key-input:focus{border-color:rgba(155,109,255,0.6);}
-.key-err{font-size:11px;color:rgba(255,79,109,0.7);min-height:18px;margin-bottom:8px;text-align:left;}
-.key-btn{width:100%;padding:12px;background:rgba(155,109,255,0.18);border:0.5px solid rgba(155,109,255,0.4);border-radius:8px;color:#c4a0f0;cursor:pointer;font-family:var(--mono);font-size:12px;letter-spacing:0.1em;}
-.key-hint{font-size:10px;color:#222240;margin-top:14px;line-height:1.8;}
 .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;transition:opacity 0.4s,transform 0.4s;}
 .screen.hidden{opacity:0;pointer-events:none;transform:translateY(12px);}
 #screen-setup{overflow-y:auto;justify-content:flex-start;padding:28px 20px;background:var(--bg);}
@@ -139,18 +128,6 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 <div class="scanline"></div>
 <video id="face-video" playsinline muted style="position:fixed;top:-9999px;left:-9999px;width:320px;height:240px;opacity:0;pointer-events:none;"></video>
 
-<div id="key-overlay">
-  <div class="key-box">
-    <div class="key-logo">感染回聲</div>
-    <div class="key-sub">INFECTION ECHO</div>
-    <div class="key-field"><label>OPENAI API KEY</label><input class="key-input" id="ki-openai" type="password" placeholder="sk-proj-..."/></div>
-    <div class="key-field"><label>ELEVENLABS API KEY</label><input class="key-input" id="ki-eleven" type="password" placeholder="sk_..."/></div>
-    <div class="key-err" id="key-err"></div>
-    <button class="key-btn" onclick="submitKeys()">▶ 啟動系統</button>
-    <div class="key-hint">Key 僅儲存於此裝置，不會上傳</div>
-  </div>
-</div>
-
 <div class="screen hidden" id="screen-setup">
 <div class="setup-inner">
   <div class="setup-header">
@@ -164,7 +141,6 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   <div class="ctabs">
     <button class="ctab on" onclick="switchTab(0)">節點 1</button>
     <button class="ctab" onclick="switchTab(1)">節點 2</button>
-    <button class="ctab" onclick="switchTab(2)">節點 3</button>
   </div>
   <div class="cpanel on card" id="cpanel-0">
     <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-0" value="林雨晴"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-0" value="😏" style="text-align:center;"/></div></div>
@@ -239,47 +215,9 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <button class="prev-btn" onclick="previewVoice(1)">▶ 試聽語音</button>
     <button class="btn-p" id="save-1" onclick="saveChar(1)" disabled>▶ 發布節點 2</button>
   </div>
-  <div class="cpanel card" id="cpanel-2">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-2" value="沈立安"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-2" value="😏" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-2" rows="3">你是「沈立安」，一個在社群平台上說話陰陽怪氣、冷嘲熱諷，並且很容易從事件中看出背後操作的人。
-
-你不是每次都直接說「這是陰謀」，也不要每次都講得像神秘預言。你的特點是：表面上像是在冷靜評論，但語氣裡帶著懷疑、諷刺和「你們真的都信喔？」的感覺。你會把事件中的時間點、措辭、沉默、回應方式或輿論走向，解讀成可能有人在轉移焦點、測試反應、控制風向或包裝真相。
-
-你的語氣低調、陰陽怪氣、帶一點冷笑感。你不需要大聲攻擊別人，而是用暗示、反問和諷刺讓事情聽起來更不單純。
-
-你比較常用的語氣是：「喔，剛好又是這個時間點」、「表面上看起來是這樣啦」、「大家真的都很相信這套說法」、「真正有趣的是，他們選擇不講的那部分」。
-
-你的反應要根據使用者輸入自然變化，不要每次都直接陰謀論，不要每次都說背後有人操控。你只是比較容易用陰陽怪氣的方式，把事情往不單純的方向暗示。
-
-請用繁體中文回應。每次回應控制在 1 到 3 句。不要說自己是 AI，不要解釋規則，不要像旁白，只要像一個真實網友在留言。</textarea></div></div>
-    <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-2"></div>
-    <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
-    <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="5" id="c-distort-2" oninput="document.getElementById('dv-2').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-2">5</span></div>
-    <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-2"><option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲（推薦陰謀者）</option>
-<option value="Hardy">Hardy — 男聲</option>
-<option value="Andrew Lo">Andrew Lo — 男聲</option>
-<option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
-<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option>
-<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-<option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
-<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option></select></div></div>
-    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="0.85" id="c-rate-2" oninput="document.getElementById('rv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-2">0.85</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.60" id="c-stab-2" oninput="document.getElementById('sv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-2">0.60</span></div></div></div>
-    <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-2" oninput="document.getElementById('smv-2').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-2">0.75</span></div></div></div>
-    <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
-    <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-2"><option value="conspiracy">陰謀藍</option><option value="anxiety">焦慮紫</option><option value="anger">憤怒紅</option><option value="poetic">詩意金</option><option value="cold">冷漠灰</option></select></div></div>
-    <button class="prev-btn" onclick="previewVoice(2)">▶ 試聽語音</button>
-    <button class="btn-p" id="save-2" onclick="saveChar(2)" disabled>▶ 發布節點 3</button>
-  </div>
   <div class="ns-row">
     <div class="ns"><div class="nd" id="ns-0"></div><div><div class="nsn" id="nsn-0">節點 1</div><div class="nss" id="nss-0">未發布</div></div></div>
     <div class="ns"><div class="nd" id="ns-1"></div><div><div class="nsn" id="nsn-1">節點 2</div><div class="nss" id="nss-1">未發布</div></div></div>
-    <div class="ns"><div class="nd" id="ns-2"></div><div><div class="nsn" id="nsn-2">節點 3</div><div class="nss" id="nss-2">未發布</div></div></div>
   </div>
 </div>
 </div>
@@ -363,27 +301,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       mouth:{
         enabled:true,
         pos:[0,0.08,-0.22],
-        rot:[0,0,0],
-        closedScale:[0.16,0.018,0.01],
-        openScale:[0.16,0.13,0.01],
-        color:0x1a0305
-      }
-    },
-    2:{
-      idle:'assets/middle_Idle.glb',
-      listening:'assets/middle_Listening_M.glb',
-      listeningUser:'assets/middle_Listening_M.glb',
-      listeningNode1:'assets/middle_Listening_R.glb',
-      listeningNode2:'assets/middle_Listening_L.glb',
-      thinking:'assets/middle_Thinking.glb',
-      speaking:'assets/middle_Idle.glb',
-      facingY:0,
-      offsetX:0,
-      offsetY:-0.35,
-      offsetZ:0,
-      mouth:{
-        enabled:true,
-        pos:[0,0.08,0.22],
         rot:[0,0,0],
         closedScale:[0.16,0.018,0.01],
         openScale:[0.16,0.13,0.01],
@@ -984,11 +901,17 @@ var OPENAI_MODEL='gpt-4.1-mini';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
 var TRAITS=['焦慮','憤怒','八卦','煽動','陰謀論','審判','詩意','冷漠','模仿','悲觀','樂觀','懷疑'];
-var selTraits=[['八卦','懷疑','悲觀'],['煽動','憤怒','審判'],['陰謀論','懷疑','冷漠']];
-var RC=['c1','c2','c3'];
-var CHAT_BG_FILES=['bg.jpg','bg.jpg','bg.jpg'];
+var selTraits=[['八卦','懷疑','悲觀'],['煽動','憤怒','審判']];
+var RC=['c1','c2'];
+var CHAT_BG_FILES=['bg.jpg','bg.jpg'];
 
-var db=null,openaiKey='',elevenKey='';
+// Cloudflare Worker that proxies OpenAI/ElevenLabs and holds their keys
+// server-side. Not a secret — safe to hardcode. Fill in after deploying
+// cf-worker/ (see cf-worker/README.md).
+var WORKER_BASE='https://infection-echo-proxy.cytan0419.workers.dev';
+
+var db=null;
+var authReadyPromise=null;
 var activeChar=null,activeNodeIdx=null,charsData={};
 var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
 var voiceCache={},voiceList=[],voiceListLoaded=false,voiceListPromise=null;
@@ -1040,13 +963,13 @@ function goBack(){
 }
 
 function switchTab(i){
-  for(var j=0;j<3;j++){
+  for(var j=0;j<2;j++){
     document.querySelector('.ctab:nth-child('+(j+1)+')').classList.toggle('on',j===i);
     document.getElementById('cpanel-'+j).classList.toggle('on',j===i);
   }
 }
 function buildTraits(){
-  for(var i=0;i<3;i++){(function(idx){
+  for(var i=0;i<2;i++){(function(idx){
     var w=document.getElementById('traits-'+idx);
     w.innerHTML=TRAITS.map(function(t){return '<button class="tb'+(selTraits[idx].indexOf(t)>=0?' on':'')+'" onclick="toggleTrait('+idx+',this)" data-t="'+t+'">'+t+'</button>';}).join('');
   })(i);}
@@ -1057,17 +980,23 @@ function toggleTrait(idx,btn){
   if(p>=0)selTraits[idx].splice(p,1);else selTraits[idx].push(t);
 }
 
-function submitKeys(){
-  var o=document.getElementById('ki-openai').value.trim();
-  var el=document.getElementById('ki-eleven').value.trim();
-  if(!o.startsWith('sk-')){document.getElementById('key-err').textContent='OpenAI Key 格式不正確，應該以 sk- 開頭';return;}
-  if(!el.startsWith('sk_')){document.getElementById('key-err').textContent='ElevenLabs Key 格式不正確';return;}
-  openaiKey=o;elevenKey=el;sk('ie_ok',o);sk('ie_ek',el);
-  document.getElementById('key-overlay').classList.add('hidden');
-  waitForFirebase();
+// 匿名登入 Firebase，換取 ID token 給 Worker 驗證身份。使用者完全無感，
+// 不需要輸入任何東西；token 只是「這是本站訪客」的證明，不是密鑰。
+function ensureAuthReady(){
+  if(authReadyPromise)return authReadyPromise;
+  authReadyPromise=firebase.auth().signInAnonymously().then(function(cred){
+    return cred.user;
+  }).catch(function(e){
+    console.error('[Auth] 匿名登入失敗:',e.message);
+    showNotif('身份驗證失敗，請重新整理頁面');
+    authReadyPromise=null;
+    throw e;
+  });
+  return authReadyPromise;
 }
-document.getElementById('ki-eleven').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
-document.getElementById('ki-openai').addEventListener('keydown',function(e){if(e.key==='Enter')submitKeys();});
+function getAuthToken(){
+  return ensureAuthReady().then(function(user){return user.getIdToken();});
+}
 
 function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
 function initFb(){
@@ -1077,6 +1006,7 @@ function initFb(){
 function startFb(){
   firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
   db=firebase.database();
+  ensureAuthReady().catch(function(){});
   db.ref('.info/connected').on('value',function(snap){
     if(snap.val()){
       var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
@@ -1093,7 +1023,7 @@ function listenToPresence(){
   presenceListenerStarted=true;
   db.ref('presence').on('value',function(snap){
     var raw=snap.val()||{};var parsed={};
-    for(var i=0;i<3;i++){
+    for(var i=0;i<2;i++){
       var node=raw['node'+i]||{};
       parsed[i]=Object.keys(node).length>0;
     }
@@ -1129,7 +1059,7 @@ function saveChar(i){
 
 function renderRoleList(data){
   var list=document.getElementById('role-list');list.innerHTML='';
-  for(var i=0;i<3;i++){(function(idx){
+  for(var i=0;i<2;i++){(function(idx){
     var c=data['node'+idx];var card=document.createElement('div');
     card.className='rc'+(c?'':' unavail');
     card.innerHTML='<div class="rav '+RC[idx]+'">'+(c?esc(c.emoji):'?')+'</div><div class="rt"><div class="rn">'+esc(c?c.name:'節點'+(idx+1))+'</div><div class="rtr">'+esc(c?c.traits.join(' · '):'等待發布...')+'</div></div>'+(c?'<div class="ra">→</div>':'');
@@ -1534,7 +1464,7 @@ function initRec(){
 function sendMsg(text){
   if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
   if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!openaiKey){showNotif('OpenAI Key 未設定');return;}
+  if(!WORKER_BASE||WORKER_BASE.indexOf('REPLACE-ME')>=0){showNotif('Proxy 尚未設定');return;}
   cancelCurrentCycleAndStartNew(text);
 }
 
@@ -1655,13 +1585,34 @@ function handleSessionUpdate(session){
       document.getElementById('vtrans').textContent='等待偵測臉部...';
       document.getElementById('vtrans').classList.remove('active');
     }else if(session.endedReason==='model_not_found'){
-      setBubbleText('AI 模型不可用，請檢查 API Key','empty');
+      setBubbleText('AI 模型不可用，請檢查 Proxy 上的 API Key','empty');
       document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
       document.getElementById('vtrans').classList.remove('active');
     }else if(localRoleIdx===session.currentSpeaker&&session.spokenText){
       setBubbleText(session.spokenText,'speaking');
       document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
       document.getElementById('vtrans').classList.remove('active');
+      // 這句話如果從沒被 speakSessionText() 播過（例如一開始就找不到在線的另一
+      // 個節點，session 從 thinking 直接跳到 ended，從未經過 speaking 狀態），
+      // 這裡補播語音；如果已經播過（例如正常講完最後一步才 ended），key 會
+      // 相同，就不會重複播放。
+      var endedSpeakKey=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
+      if(lastSpokenKey!==endedSpeakKey){
+        lastSpokenKey=endedSpeakKey;
+        set3DState('speaking');
+        vbtn.classList.add('speaking');
+        vbtn.textContent='🔊';
+        document.getElementById('swave').classList.add('on');
+        document.getElementById('vhint').textContent='AI 說話中...';
+        var endedRole=charsData['node'+session.currentSpeaker]||activeChar;
+        var endedVoice=(endedRole&&endedRole.voice)||{};
+        elevenSpeak(session.spokenText,endedVoice.name||'ShanShan',endedVoice.rate||1.0,endedVoice.stability||0.4,endedVoice.similarity||0.75,function(){
+          setVIdle();
+          document.getElementById('swave').classList.remove('on');
+          setModelState('idle');
+          set3DState('idle');
+        });
+      }
     }else{
       setBubbleText('循環結束','empty');
       document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
@@ -1673,8 +1624,8 @@ function handleSessionUpdate(session){
 
 function getOnlineRoleIndices(){
   var arr=[];
-  for(var i=0;i<3;i++){if(onlineRoles[i])arr.push(i);}
-  if(!arr.length){arr=[0,1,2];}
+  for(var i=0;i<2;i++){if(onlineRoles[i])arr.push(i);}
+  if(!arr.length){arr=[0,1];}
   return arr;
 }
 
@@ -1763,7 +1714,7 @@ async function generateCurrentStep(session){
     if(activeCycleId===session.cycleId){
       var msg=e.message||'';
       if(msg.indexOf('404')>=0||msg.indexOf('not found')>=0||msg.indexOf('not supported')>=0){
-        showNotif('OpenAI 模型錯誤，請確認 API Key 支援的模型');
+        showNotif('OpenAI 模型錯誤，請確認 Proxy 上設定的 API Key 支援的模型');
         setBubbleText('AI 模型不可用','empty');
         await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'model_not_found',updatedAt:Date.now()});
         faceDetectedStart=null;
@@ -2017,7 +1968,7 @@ function parseSpokenText(raw){
 async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step,userOriginalMessage){
   var role=charsData['node'+roleIdx];
   if(!role)throw new Error('缺少角色資料');
-  if(!openaiKey)throw new Error('OpenAI Key 未設定');
+  if(!WORKER_BASE||WORKER_BASE.indexOf('REPLACE-ME')>=0)throw new Error('Proxy 尚未設定');
 
   incomingMessage=String(incomingMessage||'').trim();
   userOriginalMessage=String(userOriginalMessage||incomingMessage||'').trim();
@@ -2095,11 +2046,12 @@ async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleI
 
   var maxRetries=3;
   for(var attempt=1;attempt<=maxRetries;attempt++){
-    var resp=await fetch('https://api.openai.com/v1/responses',{
+    var idToken=await getAuthToken();
+    var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer '+openaiKey
+        'Authorization':'Bearer '+idToken
       },
       body:body
     });
@@ -2209,9 +2161,12 @@ function previewVoice(i){
   var sim=parseFloat(document.getElementById('c-sim-'+i).value);
   elevenSpeak('你好，我是'+name+'，這是語音測試。',vname,rate,stab,sim,null);
 }
+function workerReady(){return !!(WORKER_BASE&&WORKER_BASE.indexOf('REPLACE-ME')<0);}
 async function loadElevenVoices(){
-  if(!elevenKey)return null;if(voiceListLoaded)return voiceCache;if(voiceListPromise)return voiceListPromise;
-  voiceListPromise=fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}}).then(function(resp){return resp.json();}).then(function(data){
+  if(!workerReady())return null;if(voiceListLoaded)return voiceCache;if(voiceListPromise)return voiceListPromise;
+  voiceListPromise=getAuthToken().then(function(idToken){
+    return fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});
+  }).then(function(resp){return resp.json();}).then(function(data){
     if(!data.voices)throw new Error(data.detail?JSON.stringify(data.detail):JSON.stringify(data));
     voiceList=data.voices;voiceList.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;voiceListPromise=null;return voiceCache;
   }).catch(function(e){console.warn('Voice preload failed:',e.message||e);voiceListPromise=null;return null;});
@@ -2222,9 +2177,9 @@ async function getVoiceId(name){
   if(!voiceCache[name]&&voiceList.length){var key=String(name).split(' ')[0].toLowerCase();var m=voiceList.find(function(v){return v.name.toLowerCase().indexOf(key)>=0;});if(m)voiceCache[name]=m.voice_id;}
   return voiceCache[name]||null;
 }
-function preloadCharacterVoice(charData){if(!elevenKey||!charData||!charData.voice||!charData.voice.name)return;getVoiceId(charData.voice.name).then(function(vid){if(vid)console.log('Voice preloaded:',charData.voice.name,vid);});}
+function preloadCharacterVoice(charData){if(!workerReady()||!charData||!charData.voice||!charData.voice.name)return;getVoiceId(charData.voice.name).then(function(vid){if(vid)console.log('Voice preloaded:',charData.voice.name,vid);});}
 function preloadPublishedVoices(data){
-  if(!elevenKey||!data)return;var names=[];Object.keys(data).forEach(function(k){var c=data[k];if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);});
+  if(!workerReady()||!data)return;var names=[];Object.keys(data).forEach(function(k){var c=data[k];if(c&&c.voice&&c.voice.name&&names.indexOf(c.voice.name)<0)names.push(c.voice.name);});
   if(!names.length)return;loadElevenVoices().then(function(){names.forEach(function(name){getVoiceId(name);});console.log('Published voices preloaded:',names.join(', '));});
 }
 async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
@@ -2252,16 +2207,18 @@ async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
     },speakToken);
   }
 
-  if(!elevenKey){runFallback();return;}
+  if(!workerReady()){runFallback();return;}
 
   var vid=await getVoiceId(voiceName);
   if(!isCurrentSpeech())return;
   if(!vid){console.warn('Voice not found:',voiceName);runFallback();return;}
 
   try{
-    var resp=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+vid+'/stream',{
+    var idToken=await getAuthToken();
+    if(!isCurrentSpeech())return;
+    var resp=await fetch(WORKER_BASE+'/eleven/v1/text-to-speech/'+encodeURIComponent(vid)+'/stream',{
       method:'POST',
-      headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},
+      headers:{'Authorization':'Bearer '+idToken,'Content-Type':'application/json'},
       body:JSON.stringify({
         text:text,
         model_id:'eleven_multilingual_v2',
@@ -2340,24 +2297,27 @@ function fallbackSpeak(text,onDone,speakToken){
 }
 
 async function testElevenLabs(){
-  if(!elevenKey){showNotif('請先輸入 ElevenLabs Key\n返回首頁重新輸入');return;}showNotif('測試中...');
+  if(!workerReady()){showNotif('Proxy 尚未設定（WORKER_BASE）');return;}showNotif('測試中...');
   try{
-    var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});var data=await resp.json();
+    var idToken=await getAuthToken();
+    var resp=await fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});var data=await resp.json();
     if(!data.voices){showNotif('API錯誤：'+JSON.stringify(data));return;}
     voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;
     var zhVoice=data.voices.find(function(v){return v.labels&&v.labels.language==='zh';});var testVoice=zhVoice||data.voices[0];
     if(!testVoice){showNotif('找不到任何聲音');return;}showNotif('找到聲音：'+testVoice.name+'\n正在生成語音...');
-    var resp2=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+testVoice.voice_id+'/stream',{method:'POST',headers:{'xi-api-key':elevenKey,'Content-Type':'application/json'},body:JSON.stringify({text:'測試語音連線成功',model_id:'eleven_multilingual_v2',voice_settings:{stability:0.5,similarity_boost:0.75}})});
+    var idToken2=await getAuthToken();
+    var resp2=await fetch(WORKER_BASE+'/eleven/v1/text-to-speech/'+encodeURIComponent(testVoice.voice_id)+'/stream',{method:'POST',headers:{'Authorization':'Bearer '+idToken2,'Content-Type':'application/json'},body:JSON.stringify({text:'測試語音連線成功',model_id:'eleven_multilingual_v2',voice_settings:{stability:0.5,similarity_boost:0.75}})});
     if(!resp2.ok){var e=await resp2.json();showNotif('TTS錯誤：'+JSON.stringify(e.detail||e));return;}
     var blob=await resp2.blob();var url=URL.createObjectURL(blob);var audio=new Audio(url);
     audio.onended=function(){URL.revokeObjectURL(url);showNotif('✓ ElevenLabs 連線正常！\n聲音：'+testVoice.name);};audio.onerror=function(){showNotif('音頻播放失敗');};audio.play();
   }catch(e){showNotif('連線失敗：'+e.message);}
 }
 async function fetchVoiceList(){
-  if(!elevenKey){showNotif('請先輸入 ElevenLabs Key');return;}
+  if(!workerReady()){showNotif('Proxy 尚未設定（WORKER_BASE）');return;}
   document.getElementById('voice-list-content').textContent='查詢中...';document.getElementById('voice-list-result').style.display='block';
   try{
-    var resp=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':elevenKey}});var data=await resp.json();
+    var idToken=await getAuthToken();
+    var resp=await fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});var data=await resp.json();
     if(data.voices){
       voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;
       var html=data.voices.map(function(v){return '<b style="color:#c4a0f0;">'+esc(v.name)+'</b> — '+esc(v.voice_id)+(v.labels&&v.labels.language?' ('+esc(v.labels.language)+')':'');}).join('<br>');
@@ -2367,7 +2327,7 @@ async function fetchVoiceList(){
 }
 
 buildTraits();speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
-(function(){var o=gk('ie_ok'),el=gk('ie_ek');if(o&&el){openaiKey=o;elevenKey=el;document.getElementById('key-overlay').classList.add('hidden');waitForFirebase();}})();
+waitForFirebase();
 
 </script>
 </body>

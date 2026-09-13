@@ -1,0 +1,16 @@
+name = "infection-echo-proxy"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Public, non-secret settings. Safe to commit.
+[vars]
+FIREBASE_PROJECT_ID = "encho-20101"
+# Restrict this to your actual site origin once you know it, e.g.
+# "https://zoeytan-design.github.io". "*" works but allows any site to
+# call this worker in a browser (the Firebase auth check is still the
+# real gate against abuse either way).
+ALLOWED_ORIGIN = "*"
+
+# Secrets are NOT set here. After `wrangler login`, run from this folder:
+#   npx wrangler secret put OPENAI_API_KEY
+#   npx wrangler secret put ELEVENLABS_API_KEY

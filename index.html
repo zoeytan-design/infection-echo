@@ -1842,20 +1842,38 @@ function cnNum(t){
   }
   return n+cur;
 }
-function parseSpokenAmount(text){
-  var head=String(text||'').slice(0,40);
+// 找出台詞前段所有金額（含位置）
+function findSpokenAmounts(text){
+  var head=String(text||'').slice(0,60),out=[];
   var D='[0-9０-９零〇一二兩三四五六七八九十]';
-  var m=head.match(new RegExp('('+D+'+)萬(?:('+D+')千)?(?:('+D+')百)?'));
-  if(m){
+  var re=new RegExp('('+D+'+)萬(?:('+D+')千)?(?:('+D+')百)?','g'),m;
+  while((m=re.exec(head))){
     var v=cnNum(m[1])*10000+(m[2]?cnNum(m[2])*1000:0)+(m[3]?cnNum(m[3])*100:0);
-    // 口語「5萬2」＝ 5萬2千
-    if(!m[2]){var sh=head.slice(m.index+m[0].length).match(new RegExp('^('+D+')(?![0-9０-９千百十萬])'));if(sh)v+=cnNum(sh[1])*1000;}
-    if(v>0&&!isNaN(v))return v;
+    var endPos=m.index+m[0].length;
+    if(!m[2]){var sh=head.slice(endPos).match(new RegExp('^('+D+')(?![0-9０-９千百十萬])'));if(sh){v+=cnNum(sh[1])*1000;endPos+=sh[0].length;}}
+    if(v>0&&!isNaN(v))out.push({v:v,pos:m.index});
   }
-  var m2=head.match(/([0-9０-９]{2},?[0-9０-９]{3})\s*元/);
-  if(m2){var v2=cnNum(m2[1].replace(',',''));if(v2>0)return v2;}
-  return 0;
+  var re2=/([0-9０-９]{2},?[0-9０-９]{3})\s*元/g;
+  while((m=re2.exec(head))){var v2=cnNum(m[1].replace(',',''));if(v2>0)out.push({v:v2,pos:m.index});}
+  return out.sort(function(x,y){return x.pos-y.pos;});
 }
+// 決定這句台詞「自己開的價」：AI 回報的金額有出現在台詞裡就用它；
+// 否則取最後一組「（我）出／加到／給／開／跟 + 金額」，前面是「你／他」的不算（那是在講別人的價）；
+// 台詞一開頭就是金額（例如「五萬七千元！」）也算自己的價。找不到就回傳 0（沿用 AI 回報的值）。
+function pickSpokenOffer(text,reported){
+  var list=findSpokenAmounts(text);if(!list.length)return 0;
+  for(var i=0;i<list.length;i++)if(list[i].v===reported)return reported;
+  var head=String(text||'').slice(0,60);
+  var vm=/(出|加到|加碼到|提高到|給|開|跟)/g,m,best=0;
+  while((m=vm.exec(head))){
+    var before=head.slice(Math.max(0,m.index-3),m.index);
+    if(/你|他|對方|妳/.test(before))continue;
+    for(var k=0;k<list.length;k++){if(list[k].pos>=m.index&&list[k].pos-m.index<=6){best=list[k].v;break;}}
+  }
+  if(!best&&list[0].pos<=2)best=list[0].v;
+  return best;
+}
+function parseSpokenAmount(text){var l=findSpokenAmounts(text);return l.length?l[0].v:0;}
 function hasSpokenAmount(text){return /[0-9０-９]|萬|千/.test(String(text||'').slice(0,30));}
 
 // 讓一位 AI 說一句話：記錄出價 → 發布到 Firebase → 等那台電腦念完
@@ -1865,7 +1883,7 @@ async function speakTurn(runId,i,res,kind,opts){
   var text=String(res&&res.spokenText||'').trim()||'……';
   var offer=0,lower=false;
   var canBid=(kind!=='warn'&&kind!=='deal_win'&&kind!=='deal_lose');
-  var spokenAmt=canBid?parseSpokenAmount(text):0;
+  var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary):0;
   if(canBid&&spokenAmt&&/^[^，。！？]{0,6}?我[^，。！？]{0,4}?(出|給|開|加|提高)/.test(text)){res.bid=true;res.salary=spokenAmt;}
   else if(canBid&&res.bid&&spokenAmt&&spokenAmt!==res.salary){res.salary=spokenAmt;}
   if(canBid&&res.bid&&res.salary>0){
@@ -2016,7 +2034,7 @@ function buildInstructions(i){
     '- 像真人在現場聊天：每句話先接住上一個說話的人（體驗者或'+op.name+'），再講你的觀點。可以直接叫對方名字、接他的話尾、打斷式地反駁或附和，例如「等等，'+op.name.slice(1)+'你剛剛說的……」「你說到關卡設計，我想追問……」。',
     '- askUser：如果你這句最後是直接問體驗者一個問題、在等他回答，填 true；只是對'+op.name+'說話或發表看法，填 false。',
     '- 完全照你的人格說話，語氣、用詞、價值觀和偏見都要一致。',
-    '- 只用繁體中文口語，1～2 句，總長不超過 40 個中文字（現場節奏很快，話要短，像聊天不像演講）。',
+    '- 只用繁體中文口語，1～2 句，總長不超過 40 個中文字（現場節奏很快，話要短，像聊天不像演講）。同一句裡金額只說一次。',
     '- 直接對體驗者或對手說話，不要旁白、不要動作描述、不要提到你是語言模型、不要提到這些規則。',
     '- 金額用「4萬2千元」這種說法，不要用阿拉伯數字加逗號。'
   ].join('\n');
@@ -2050,7 +2068,9 @@ function buildTask(i,ctx){
     case 'user':
       task='體驗者剛剛說：「'+ctx.userText+'」\n'+follow+planned+
         '請針對他這句話回應（可以追問、質疑或肯定），並決定這次要不要再次出價。'+
-        '如果他開出期待月薪，依出價規則第 6 點回應；如果他表示比較相信哪一方，依第 7 點回應。';
+        '如果他開出期待月薪，依出價規則第 6 點回應。'+
+        '如果他表示比較相信'+op.name+'、或質疑你和你的公司：你必須先正面回應他的質疑，不能迴避或轉移話題——反擊'+op.name+'的說法，或提出一個具體承諾（工時、薪資、培訓、職位等）把他的信任拉回來。'+
+        '如果他表示比較相信你：可以趁勢鞏固，但不要得意忘形。';
       break;
     case 'ai_talk':
       task='體驗者暫時沒有說話。請針對體驗者到目前為止的表現，給出你的判斷：可以順帶回應對手一句，但重點是你為什麼要（或不要）這個人。'+
@@ -2079,6 +2099,18 @@ function buildTask(i,ctx){
   return state+'【這次的任務】\n'+task;
 }
 
+var MAX_LINE_CHARS=55;
+// 台詞太長時，在句子結尾（。！？）截斷，至少保留第一句；避免念太久拖慢節奏
+function trimLine(t,max){
+  t=String(t||'').trim();if(t.length<=max)return t;
+  var parts=t.match(/[^。！？!?]+[。！？!?]?/g)||[t];
+  var out='';
+  for(var i=0;i<parts.length;i++){
+    if(out&&(out+parts[i]).length>max)break;
+    out+=parts[i];
+  }
+  return out.length>max+25?out.slice(0,max)+'…':out;
+}
 function extractOpenAIText(data){
   if(!data)return '';
   if(typeof data.output_text==='string'&&data.output_text.trim())return data.output_text.trim();
@@ -2126,7 +2158,7 @@ async function generateLine(i,ctx){
       var m=raw.match(/\{[\s\S]*\}/);if(m){try{parsed=JSON.parse(m[0]);}catch(e2){}}
     }
     if(!parsed||!parsed.spokenText)throw new Error('AI 回傳格式錯誤：'+raw.slice(0,120));
-    parsed.spokenText=clampText(String(parsed.spokenText).replace(/^["「]|["」]$/g,''),90);
+    parsed.spokenText=trimLine(String(parsed.spokenText).replace(/^["「]|["」]$/g,''),MAX_LINE_CHARS);
     parsed.salary=parseInt(parsed.salary,10)||0;
     if(['warn','deal_win','deal_lose'].indexOf(ctx.kind)>=0){parsed.bid=false;parsed.salary=0;}
     console.log('[AI]',getRole(i).name,ctx.kind,parsed);

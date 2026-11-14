@@ -1014,7 +1014,12 @@ function salaryCap(card){return Math.round(card.max*SALARY_CAP_RATIO/1000)*1000;
 // 沒設定過時，選 A（節點 1）的那台預設為主控。
 function getHostPref(){return gk('pt_host');}
 function setHostPref(on){sk('pt_host',on?'1':'0');}
+var URL_PARAMS=new URLSearchParams(location.search);
 function isHost(){
+  // 網址加 ?host=1 / ?host=0 可直接指定（優先於勾選框）
+  var q=URL_PARAMS.get('host');
+  if(q==='1')return true;
+  if(q==='0')return false;
   var p=getHostPref();
   if(p==='1')return true;
   if(p==='0')return false;

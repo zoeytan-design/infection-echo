@@ -5,6 +5,15 @@ AI 時代，大部分工作都被 AI 取代。體驗者來到 AI 經營的企業
 - **A｜顧承淵**（營運長 COO）：節點 1，Boy 模型
 - **B｜程以墨**（創新長 CIO）：節點 2，middle 模型
 
+## Demo 網址
+
+`six-branch` 沒有放在 GitHub Pages 上，可以用 githack 直接開（第一次會出現提醒頁，按「Open the page」）：
+
+- 電腦一（主控，A 顧承淵）：`https://raw.githack.com/zoeytan-design/infection-echo/six-branch/index.html?host=1`
+- 電腦二（B 程以墨）：`https://raw.githack.com/zoeytan-design/infection-echo/six-branch/index.html?host=0`
+
+網址最後的 `?host=1`／`?host=0` 指定這台是不是主控電腦，不用再勾選。請用 Chrome 開，並允許鏡頭和麥克風。
+
 ## 開場前準備
 
 1. 兩台電腦都用 Chrome 開啟網頁。

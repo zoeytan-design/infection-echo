@@ -127,40 +127,40 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .host-toggle{display:block;margin-top:16px;font-size:11px;color:var(--text-dim);text-align:center;cursor:pointer;}
 .host-toggle b{color:var(--teal);font-weight:400;}
 .chat-scene::after{height:42%;background:linear-gradient(transparent,rgba(5,5,8,0.35) 45%,rgba(5,5,8,0.85));}
-.tb-label{font-family:var(--mono);font-size:clamp(9px,1.25vh,12px);letter-spacing:0.18em;color:rgba(255,255,255,0.5);}
+.tb-label{font-family:var(--mono);font-size:clamp(9px,0.7cqw,12px);letter-spacing:0.18em;color:rgba(255,255,255,0.5);}
 /* 上方資訊列 */
 .topbar{position:absolute;left:0;right:0;top:0;height:13%;z-index:8;display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:0 3%;background:linear-gradient(rgba(5,5,8,0.82),rgba(5,5,8,0.35) 70%,transparent);font-family:var(--serif);color:#fff;}
-.tb-title{font-size:clamp(16px,3vh,32px);font-weight:700;line-height:1.2;}
-.tb-range{font-size:clamp(11px,1.6vh,16px);color:rgba(255,255,255,0.6);}
-.tb-hint{text-align:center;font-size:clamp(12px,1.9vh,20px);color:rgba(255,255,255,0.85);line-height:1.4;}
+.tb-title{font-size:clamp(16px,1.69cqw,32px);font-weight:700;line-height:1.2;}
+.tb-range{font-size:clamp(11px,0.9cqw,16px);color:rgba(255,255,255,0.6);}
+.tb-hint{text-align:center;padding:0 2%;font-size:clamp(12px,1.07cqw,20px);color:rgba(255,255,255,0.85);line-height:1.4;}
 .tb-timer-wrap{text-align:right;}
-.tb-timer{font-family:var(--mono);font-size:clamp(20px,4vh,44px);color:var(--gold);line-height:1.1;}
+.tb-timer{font-family:var(--mono);font-size:clamp(20px,2.25cqw,44px);color:var(--gold);line-height:1.1;}
 .tb-timer.low{color:#ff5a6e;}
 /* 右側出價卡 */
-.hud-offers{position:absolute;right:3%;top:15%;width:24%;z-index:6;background:rgba(5,5,8,0.62);border:0.5px solid rgba(255,255,255,0.14);border-radius:14px;padding:10px 14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:var(--serif);color:#fff;}
+.hud-offers{position:absolute;right:3%;top:16%;width:27%;z-index:6;background:rgba(5,5,8,0.62);border:0.5px solid rgba(255,255,255,0.14);border-radius:14px;padding:10px 14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:var(--serif);color:#fff;}
 .offer-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0 5px;border-top:0.5px solid rgba(255,255,255,0.1);}
 .tb-label+.offer-row{border-top:none;}
-.offer-who{font-size:clamp(12px,1.9vh,19px);color:rgba(255,255,255,0.8);}
-.offer-amt{font-family:var(--mono);font-size:clamp(14px,2.5vh,27px);color:rgba(255,255,255,0.4);white-space:nowrap;}
+.offer-who{white-space:nowrap;font-size:clamp(12px,1.07cqw,19px);color:rgba(255,255,255,0.8);}
+.offer-amt{font-family:var(--mono);font-size:clamp(14px,1.41cqw,27px);color:rgba(255,255,255,0.4);white-space:nowrap;}
 .offer-row.has .offer-amt{color:#fff;}
 .offer-row.last .offer-amt{color:var(--teal);}
 .offer-row.deal .offer-amt{color:var(--gold);}
-.offer-note{font-size:clamp(10px,1.5vh,14px);color:rgba(255,255,255,0.55);margin-top:2px;min-height:1em;}
+.offer-note{font-size:clamp(10px,0.84cqw,14px);color:rgba(255,255,255,0.55);margin-top:2px;min-height:1em;}
 /* 出價特效 */
-.offer-flash{position:absolute;left:5%;bottom:31%;z-index:9;transform:translate(0,10px);font-family:var(--serif);font-weight:700;font-size:clamp(20px,4.4vh,48px);color:var(--teal);text-shadow:0 2px 18px rgba(0,0,0,0.85);opacity:0;transition:opacity 0.35s,transform 0.35s;pointer-events:none;white-space:nowrap;}
+.offer-flash{position:absolute;left:5%;top:44%;z-index:9;transform:translate(0,10px);font-family:var(--serif);font-weight:700;font-size:clamp(20px,2.48cqw,48px);color:var(--teal);text-shadow:0 2px 18px rgba(0,0,0,0.85);opacity:0;transition:opacity 0.35s,transform 0.35s;pointer-events:none;white-space:nowrap;}
 .offer-flash.on{opacity:1;transform:translate(0,0);}
 .offer-flash.lower{color:#ffb35a;}
 /* 下方對話區：兩台螢幕顯示同一段對話 */
 .dialogue{position:absolute;left:7%;right:7%;bottom:4%;min-height:15%;z-index:10;background:rgba(5,5,8,0.72);border:0.5px solid rgba(255,255,255,0.14);border-radius:18px;padding:14px 22px 16px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:opacity 0.3s;}
 .dialogue.hidden{opacity:0;pointer-events:none;}
 .dlg-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-.dlg-who{font-family:var(--serif);font-weight:700;font-size:clamp(12px,1.9vh,19px);padding:3px 12px;border-radius:999px;background:rgba(255,255,255,0.12);color:#fff;}
+.dlg-who{font-family:var(--serif);font-weight:700;font-size:clamp(12px,1.07cqw,19px);padding:3px 12px;border-radius:999px;background:rgba(255,255,255,0.12);color:#fff;}
 .dlg-who.a{background:rgba(0,201,167,0.22);color:#7ff5de;}
 .dlg-who.b{background:rgba(240,165,0,0.22);color:#ffd27a;}
 .dlg-who.user{background:rgba(255,255,255,0.18);color:#fff;}
-.dlg-state{font-size:clamp(10px,1.5vh,14px);color:rgba(255,255,255,0.55);}
+.dlg-state{font-size:clamp(10px,0.84cqw,14px);color:rgba(255,255,255,0.55);}
 .dlg-state.thinking::after{content:'';animation:dotText 1.1s steps(4,end) infinite;}
-.dlg-text{font-family:var(--serif);font-size:clamp(15px,2.9vh,32px);line-height:1.5;color:#fff;font-weight:700;text-shadow:0 2px 10px rgba(0,0,0,0.5);}
+.dlg-text{font-family:var(--serif);font-size:clamp(15px,1.63cqw,32px);line-height:1.5;color:#fff;font-weight:700;text-shadow:0 2px 10px rgba(0,0,0,0.5);}
 .dlg-text.dim{color:rgba(255,255,255,0.55);font-weight:500;}
 .dialogue .swave{margin-left:auto;}
 .mic-dot{font-size:16px;opacity:0;transition:opacity 0.2s;}
@@ -170,8 +170,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .hud-center{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(5,5,8,0.6);transition:opacity 0.3s;}
 .hud-center.hidden{opacity:0;pointer-events:none;}
 .hud-center-box{text-align:center;padding:30px 44px;border-radius:20px;background:rgba(0,0,0,0.82);border:0.5px solid rgba(255,255,255,0.2);max-width:72%;}
-.hud-center-title{font-family:var(--serif);font-size:clamp(22px,5vh,56px);font-weight:700;color:#fff;}
-.hud-center-sub{font-family:var(--serif);font-size:clamp(13px,2.2vh,24px);color:rgba(255,255,255,0.75);margin-top:10px;white-space:pre-line;line-height:1.6;}
+.hud-center-title{font-family:var(--serif);font-size:clamp(22px,2.81cqw,56px);font-weight:700;color:#fff;}
+.hud-center-sub{font-family:var(--serif);font-size:clamp(13px,1.24cqw,24px);color:rgba(255,255,255,0.75);margin-top:10px;white-space:pre-line;line-height:1.6;}
 .hud-center.deal .hud-center-title{color:var(--gold);}
 /* 按鍵說明（主控電腦，按 H 切換） */
 .key-legend{position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:26;font-size:11px;color:rgba(255,255,255,0.75);background:rgba(0,0,0,0.7);padding:6px 14px;border-radius:999px;display:none;white-space:nowrap;}
@@ -179,6 +179,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .key-tip{position:absolute;left:12px;bottom:8px;z-index:26;font-size:10px;color:rgba(255,255,255,0.3);display:none;}
 .key-tip.on{display:block;}
 .chat-back-float{top:auto;bottom:8px;right:12px;opacity:0.35;font-size:10px;padding:4px 10px;}
+.chat-phone{container-type:inline-size;}
 </style>
 </head>
 <body>
@@ -1631,7 +1632,7 @@ function enterRole(idx){
 //  每台電腦只負責把「輪到自己角色」的台詞念出來，念完回報 turnDone。
 // ════════════════════════════════════════════════════════
 var H=null;
-var OPEN_HINT='你可以隨時補充說明或開出期待月薪 ・ 按 A / B 與該企業成交';
+var OPEN_HINT='隨時可以補充或開出期待月薪';
 
 function hostAlive(runId,allowDeal){
   if(!H||H.id!==runId)return false;
@@ -1717,7 +1718,7 @@ async function runIntro(runId){
 
 async function hostRound1(runId){
   H.phase='round1';
-  H.hint='第一輪：兩位面試官正在評估你，請先聆聽';
+  H.hint='第一輪：請先聆聽兩位的評估';
   await hostPublish();
   await respondBoth(runId,{kind:'round1'});
   if(!hostAlive(runId))return;
@@ -1860,7 +1861,7 @@ function findSpokenAmounts(text){
 // 決定這句台詞「自己開的價」：AI 回報的金額有出現在台詞裡就用它；
 // 否則取最後一組「（我）出／加到／給／開／跟 + 金額」，前面是「你／他」的不算（那是在講別人的價）；
 // 台詞一開頭就是金額（例如「五萬七千元！」）也算自己的價。找不到就回傳 0（沿用 AI 回報的值）。
-function pickSpokenOffer(text,reported){
+function pickSpokenOffer(text,reported,otherAmt){
   var list=findSpokenAmounts(text);if(!list.length)return 0;
   for(var i=0;i<list.length;i++)if(list[i].v===reported)return reported;
   var head=String(text||'').slice(0,60);
@@ -1870,7 +1871,16 @@ function pickSpokenOffer(text,reported){
     if(/你|他|對方|妳/.test(before))continue;
     for(var k=0;k<list.length;k++){if(list[k].pos>=m.index&&list[k].pos-m.index<=6){best=list[k].v;break;}}
   }
+  if(!best){
+    for(var q=list.length-1;q>=0;q--){
+      var pre=head.slice(Math.max(0,list[q].pos-3),list[q].pos);
+      var post=head.slice(list[q].pos,list[q].pos+10);
+      if((/我/.test(pre)&&!/你|他/.test(pre))||/^[^，。！？]*?(跟上|跟進|跟了|我跟)/.test(post)){best=list[q].v;break;}
+    }
+  }
   if(!best&&list[0].pos<=2)best=list[0].v;
+  // 只提到一個金額、而且不是對手目前的價 → 就是自己的價
+  if(!best&&list.length===1&&list[0].v!==otherAmt)best=list[0].v;
   return best;
 }
 function parseSpokenAmount(text){var l=findSpokenAmounts(text);return l.length?l[0].v:0;}
@@ -1883,7 +1893,7 @@ async function speakTurn(runId,i,res,kind,opts){
   var text=String(res&&res.spokenText||'').trim()||'……';
   var offer=0,lower=false;
   var canBid=(kind!=='warn'&&kind!=='deal_win'&&kind!=='deal_lose');
-  var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary):0;
+  var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary,H.offers[1-i]?H.offers[1-i].amount:0):0;
   if(canBid&&spokenAmt&&/^[^，。！？]{0,6}?我[^，。！？]{0,4}?(出|給|開|加|提高)/.test(text)){res.bid=true;res.salary=spokenAmt;}
   else if(canBid&&res.bid&&spokenAmt&&spokenAmt!==res.salary){res.salary=spokenAmt;}
   if(canBid&&res.bid&&res.salary>0){

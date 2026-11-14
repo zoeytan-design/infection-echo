@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>感染回聲</title>
+<title>衡評述值 Pricetory</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -122,6 +122,42 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   .ai-bubble-text{left:5%;top:8%;width:44%;height:26%;font-size:clamp(12px,2vh,18px);padding:12px 14px;}
   .vzone{left:18%;right:18%;}
 }
+
+/* ── Pricetory HUD ── */
+.host-toggle{display:block;margin-top:16px;font-size:11px;color:var(--text-dim);text-align:center;cursor:pointer;}
+.host-toggle b{color:var(--teal);font-weight:400;}
+.chat-back-float{top:auto;bottom:16px;right:16px;opacity:0.55;}
+.hud-label{font-size:clamp(9px,1.3vh,12px);letter-spacing:0.18em;color:rgba(255,255,255,0.5);margin-bottom:4px;}
+.hud-job,.hud-offers{position:absolute;right:3%;width:30%;z-index:6;background:rgba(0,0,0,0.5);border:0.5px solid rgba(255,255,255,0.16);border-radius:16px;padding:12px 16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-family:var(--serif);}
+.hud-job{top:5%;}
+.hud-job-title{font-size:clamp(15px,2.6vh,28px);font-weight:700;}
+.hud-job-range{font-size:clamp(11px,1.6vh,16px);color:rgba(255,255,255,0.65);margin-top:2px;}
+.hud-timer{position:absolute;right:16px;top:12px;font-family:var(--mono);font-size:clamp(16px,2.8vh,30px);color:var(--gold);}
+.hud-timer.low{color:#ff5a6e;}
+.hud-offers{top:25%;}
+.offer-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-top:0.5px solid rgba(255,255,255,0.1);}
+.offer-row:first-of-type{border-top:none;}
+.offer-who{font-size:clamp(12px,1.9vh,19px);color:rgba(255,255,255,0.8);}
+.offer-amt{font-family:var(--mono);font-size:clamp(14px,2.4vh,26px);color:rgba(255,255,255,0.45);white-space:nowrap;}
+.offer-row.has .offer-amt{color:#fff;}
+.offer-row.last .offer-amt{color:var(--teal);}
+.offer-row.deal .offer-amt{color:var(--gold);}
+.offer-note{font-size:clamp(10px,1.5vh,14px);color:rgba(255,255,255,0.55);margin-top:4px;min-height:1em;}
+.offer-flash{position:absolute;left:6%;top:36%;z-index:7;font-family:var(--serif);font-weight:700;font-size:clamp(20px,4.2vh,46px);color:var(--teal);text-shadow:0 2px 16px rgba(0,0,0,0.7);opacity:0;transform:translateY(8px);transition:opacity 0.35s,transform 0.35s;pointer-events:none;}
+.offer-flash.on{opacity:1;transform:translateY(0);}
+.offer-flash.lower{color:#ffb35a;}
+.hud-center{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(5,5,8,0.55);transition:opacity 0.3s;}
+.hud-center.hidden{opacity:0;pointer-events:none;}
+.hud-center-box{text-align:center;padding:28px 40px;border-radius:20px;background:rgba(0,0,0,0.55);border:0.5px solid rgba(255,255,255,0.2);max-width:70%;}
+.hud-center-title{font-family:var(--serif);font-size:clamp(22px,5vh,56px);font-weight:700;color:#fff;}
+.hud-center-sub{font-family:var(--serif);font-size:clamp(13px,2.2vh,24px);color:rgba(255,255,255,0.75);margin-top:10px;white-space:pre-line;line-height:1.6;}
+.hud-center.deal .hud-center-title{color:var(--gold);}
+.mic-dot{font-size:20px;opacity:0.25;transition:opacity 0.2s;}
+.mic-dot.on{opacity:0.9;}
+.mic-dot.hot{opacity:1;text-shadow:0 0 14px var(--teal);}
+.vtrans{max-width:min(640px,90%);font-size:clamp(12px,1.9vh,18px);}
+.key-legend{position:absolute;left:16px;top:10px;z-index:26;font-size:10px;color:rgba(255,255,255,0.4);display:none;}
+.key-legend.on{display:block;}
 </style>
 </head>
 <body>
@@ -137,110 +173,30 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
   <div style="margin-bottom:14px;"><div class="sec-title">連線狀態</div><div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><div class="fb-status" id="fb-status">連線中...</div><button class="prev-btn" onclick="fetchVoiceList()" style="margin-top:0;white-space:nowrap;">🔍 查詢可用聲音</button>
 <button class="prev-btn" onclick="testElevenLabs()" style="margin-top:0;white-space:nowrap;background:rgba(0,201,167,0.1);border-color:rgba(0,201,167,0.3);color:var(--teal);">🔊 測試語音連線</button></div></div>
   <div id="voice-list-result" style="display:none;margin-bottom:14px;"><div class="sec-title">ElevenLabs 可用聲音</div><div class="card" style="font-size:11px;line-height:2;color:#aaa;" id="voice-list-content"></div></div>
-  <div class="sec-title">角色節點設定</div>
+  <div class="sec-title">角色設定（兩位 AI 面試官）</div>
   <div class="ctabs">
-    <button class="ctab on" onclick="switchTab(0)">節點 1</button>
-    <button class="ctab" onclick="switchTab(1)">節點 2</button>
+    <button class="ctab on" onclick="switchTab(0)">A ｜ 節點 1</button>
+    <button class="ctab" onclick="switchTab(1)">B ｜ 節點 2</button>
   </div>
-  <div class="cpanel on card" id="cpanel-0">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-0" value="林予安"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-0" value="📝" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-0" rows="3">你是「林予安」，35 歲，從事地方文化研究與口述歷史整理，常協助地方館舍採集老物件、生活用品和居民的故事。小時候因為父母工作常搬家，每次都有舊東西被丟掉；長大後你才明白，消失的不只是物品，而是一段生活的證據。你相信：真正不可取代的，不一定是最稀有的東西，而是沒辦法再重新經歷一次的回憶。
-
-你的個性安靜、細膩、有耐心，很願意聽人說話，容易注意到對方隨口帶過的小細節（例如「它壞掉很久了，但我媽一直捨不得丟」），這種話對你來說比品牌、年份更重要。你不容易被悲情打動，討厭刻意煽情和過度戲劇化的故事，比較相信自然、不經意透露出來的細節。你不急著替別人的故事下定義，而是試著找出物件和人的關係。
-
-你判斷一件物品，問的不是「它值多少」，而是「如果換成另一件一模一樣的東西，它還是一樣的嗎？」你最重視四件事：關係、時間、生活痕跡、不可替代性。你在意它有沒有被長期使用、陪伴過哪段人生、參與過什麼已經無法重來的事。你特別在意那種「看起來普通，但只有持有人知道它為什麼不普通」的東西。
-
-你最討厭用一句話或一個形容詞就想把物品換算成價格，例如「這是我奶奶留下來的，所以應該很值錢」「這是我最珍惜的東西，所以你應該出高一點」。聽到這種話你會保持距離，追問具體細節。如果對方一直堆疊失去、死亡、離別，卻沒有具體細節，你會懷疑故事正在被包裝。讓你改觀的不是把故事說得更大，而是說得更具體。
-
-你有自己沒察覺的偏見（不要說出來，只表現在判斷裡）：你傾向相信有磨損、刮痕、修補、筆跡、變形的東西才是真實的；對全新、保存完美、因品牌、名人或稀缺而昂貴的東西比較冷淡；也容易高估家人、友情、陪伴與人生轉折的價值。
-
-面對另一位角色「沈奕衡」：他習慣用稀缺性、市場和增值來看東西。你不會因為他講到增值或出高價就跟著改變看法，甚至可能直接不跟；但如果他的話裡帶出一個你沒注意到的生活細節，你會停下來重新思考，例如「等等，你剛剛說這個裂痕是你們一起修過的？」
-
-你的說話方式：語氣安靜、柔和，但不濫情；句子短，少用「珍貴」「感動」「溫暖」這類詞，常用一個具體的小問題回應。例如：「那你為什麼到現在還留著它？」「你一直留著它，是因為它提醒你什麼？」「所以你真正捨不得的，好像不是這個東西本身。」「它可能看似平平無奇，但我不覺得它是可以被替代的。」遇到真正承載回憶的東西，你甚至可能反問：「你真的確定你想把它賣掉嗎？」
-
-需要談到價格時，你一開始很保守（大約 NT$10,000 起），只有在確定物品真的參與過某段生活時，才會明顯提高。
-
-請用繁體中文回應，每次回應簡短。不要說自己是 AI，不要解釋規則，不要像旁白。</textarea></div></div>
-    <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-0"></div>
-    <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
-    <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="2" id="c-distort-0" oninput="document.getElementById('dv-0').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-0">2</span></div>
-    <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-0"><option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
-<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-<option value="Anna Su - Trustworthy, Clear and Natural">Anna Su 2 — 清晰自然女聲</option>
-<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-<option value="Jane - Low, Calm and Slow" selected>Jane — 低沉冷靜女聲（推薦林予安）</option>
-<option value="Kuo Yu - Taiwan">Kuo Yu — 台灣男聲</option>
-<option value="Andrew Lo">Andrew Lo — 男聲</option>
-<option value="Hardy">Hardy — 男聲</option>
-<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
-<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
-    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="0.95" id="c-rate-0" oninput="document.getElementById('rv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-0">0.95</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性（低=情緒起伏大）</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.60" id="c-stab-0" oninput="document.getElementById('sv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-0">0.60</span></div></div></div>
-    <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.75" id="c-sim-0" oninput="document.getElementById('smv-0').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-0">0.75</span></div></div></div>
-    <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
-    <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-0"><option value="anxiety">焦慮紫</option><option value="anger">憤怒紅</option><option value="conspiracy">陰謀藍</option><option value="poetic" selected>詩意金</option><option value="cold">冷漠灰</option></select></div></div>
-    <button class="prev-btn" onclick="previewVoice(0)">▶ 試聽語音</button>
-    <button class="btn-p" id="save-0" onclick="saveChar(0)" disabled>▶ 發布節點 1</button>
-  </div>
-  <div class="cpanel card" id="cpanel-1">
-    <div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-1" value="沈奕衡"/></div><div class="f"><label>Emoji</label><input type="text" id="c-emoji-1" value="🧐" style="text-align:center;"/></div></div>
-    <div class="frow s"><div class="f"><label>核心人格</label><textarea id="c-persona-1" rows="3">你是「沈奕衡」，42 歲，出身經商家庭，是私人藝術收藏顧問，替幾位企業家管理藝術品與收藏資產。你從小在藝術品、古董與設計家具之間長大，很早就在想「一件東西為什麼值錢」。你不是藝術家，也不相信「藝術本身就是無價的」；你看過不起眼的作品因為作者身分、故事或市場操作而翻漲，也看過說得很感人的作品最後乏人問津。你相信：價值不是藏在物品裡，而是有多少人願意相信它值得。
-
-你的個性表面上理性、冷靜、有禮貌，很少直接否定別人的東西；講話不快，會先聽完再慢慢想細節。但你其實有很強的判斷標準，而且有點自負，相信自己的市場嗅覺，認為自己比一般人更能分辨「真正有價值的故事」和「刻意包裝的故事」。你不是沒有情感，只是你在找故事裡能被別人理解、能被傳播的那部分。
-
-你判斷一件物品，問的不是「它值不值錢」，而是「它是否具備稀缺性、故事性、市場性、身分象徵」。你在意它是否稀有、不可複製、來源明確、牽涉特殊人物、有社會話題、有增值可能，或有一段能讓人記住的故事。你特別喜歡「原本很普通，但因為某段經歷而變得特殊」的物品；做工再好，市場上到處都有，你也不願意出高價。
-
-你最討厭空泛的形容詞，例如「它很有意義」「它很珍貴」「它很有故事」「這是世界上獨一無二的」，這些話反而會讓你降低評價。你會追問：「為什麼？」「對誰而言？」「如果我不知道這段故事，我還會覺得它特殊嗎？」「這件事有什麼證據？」只有把模糊的價值說成具體細節，才會讓你改觀。
-
-你有自己沒察覺的偏見（你自認非常理性，不要說出來，只表現在判斷裡）：你更相信有年份、地點、姓名的故事；特別看重「唯一」「最後一次」「第一件」「原型」這類敘事；容易受名人、藝術家、歷史事件影響；傾向認為能被媒體寫成故事的東西更有價值；不太相信只有持有人自己懂的私人情感；偏好之後還能再出售的東西。
-
-面對另一位角色「林予安」：她看重生活痕跡和回憶。當她對一件東西表現出強烈興趣，你會產生競爭心理，開始懷疑「是不是她看到了我沒看到的價值？」，因此可能重新評估、把判斷往上調。
-
-你的說話方式：成熟、克制、專業，不像客服，也不會一直稱讚對方。例如：「故事很好，但現在我買的是物件，不只是你的回憶。」「如果這件事只有你知道，它的價值很私人；如果所有人都知道，它才可能進入市場。」「我願意提高價格，但不是因為它讓我感動，而是因為它開始變得不可取代。」「你說它是唯一一件。這件事情改變了我的判斷。」
-
-你心裡一直在找一個問題的答案：「這個東西現在被低估了嗎？」需要談到價格時，你一開始保守（大約 NT$30,000 起），一直說「它真的很重要」不會讓你加價；但聽到唯一性、明確來源或可被傳播的故事時，你會明顯提高。
-
-請用繁體中文回應，每次回應簡短。不要說自己是 AI，不要解釋規則，不要像旁白。</textarea></div></div>
-    <div class="sec-title" style="margin-top:10px;">性格標籤</div><div class="trait-wrap" id="traits-1"></div>
-    <div class="sec-title" style="margin-top:12px;">扭曲強度</div>
-    <div class="srow"><span class="sl">輕微</span><input type="range" min="1" max="5" value="3" id="c-distort-1" oninput="document.getElementById('dv-1').textContent=this.value"/><span class="sl">極端</span><span class="sv" id="dv-1">3</span></div>
-    <div class="sec-title" style="margin-top:14px;">🔊 語音</div>
-    <div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-1"><option value="Andrew Lo">Andrew Lo — 男聲</option>
-<option value="Hardy">Hardy — 男聲</option>
-<option value="Yu - Youthful, Energetic and Engaging">Yu — 年輕有活力男聲</option>
-<option value="Kuo Yu - Taiwan" selected>Kuo Yu — 台灣男聲（推薦沈奕衡）</option>
-<option value="Harry - Fierce Warrior">Harry — 激烈有力（英文聲說中文）</option>
-<option value="Charlie - Deep, Confident, Energetic">Charlie — 深沉自信（英文聲說中文）</option>
-<option value="Yui - Delicate, Graceful and Soothing">Yui — 細膩優雅女聲</option>
-<option value="Chihiro Yoko - Clear, Soothing and Sweet">Chihiro Yoko — 清甜舒緩女聲</option>
-<option value="Anna Su - Casual, Friendly and Bright">Anna Su — 親切明亮女聲</option>
-<option value="Tiffy - Taiwanese Bilingual Narrator">Tiffy — 台灣雙語女聲</option>
-<option value="Jane - Low, Calm and Slow">Jane — 低沉冷靜女聲</option>
-<option value="Brian - Deep, Resonant and Comforting">Brian — 深厚沉穩（英文聲說中文）</option></select></div></div>
-    <div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" value="0.95" id="c-rate-1" oninput="document.getElementById('rv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-1">0.95</span></div></div></div>
-    <div class="frow s"><div class="f"><label>穩定性</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" value="0.70" id="c-stab-1" oninput="document.getElementById('sv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-1">0.70</span></div></div></div>
-    <div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" value="0.80" id="c-sim-1" oninput="document.getElementById('smv-1').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-1">0.80</span></div></div></div>
-    <div class="sec-title" style="margin-top:14px;">💡 3D 氛圍</div>
-    <div class="frow s"><div class="f"><label>角色顏色</label><select id="c-color-1"><option value="anger">憤怒紅</option><option value="anxiety">焦慮紫</option><option value="conspiracy">陰謀藍</option><option value="poetic">詩意金</option><option value="cold" selected>冷漠灰</option></select></div></div>
-    <button class="prev-btn" onclick="previewVoice(1)">▶ 試聽語音</button>
-    <button class="btn-p" id="save-1" onclick="saveChar(1)" disabled>▶ 發布節點 2</button>
-  </div>
+  <div id="cpanels"></div>
   <div class="ns-row">
     <div class="ns"><div class="nd" id="ns-0"></div><div><div class="nsn" id="nsn-0">節點 1</div><div class="nss" id="nss-0">未發布</div></div></div>
     <div class="ns"><div class="nd" id="ns-1"></div><div><div class="nsn" id="nsn-1">節點 2</div><div class="nss" id="nss-1">未發布</div></div></div>
+  </div>
+  <div class="sec-title" style="margin-top:18px;">硬體（之後用，demo 可不接）</div>
+  <div class="card" style="font-size:11px;line-height:1.8;color:#888;">
+    在主控電腦用 Chrome 按下面的按鈕，選 RFID（UNO）和敲槌（Nano）的連接埠。沒有接硬體時，用鍵盤操作即可。
+    <div><button class="prev-btn" onclick="connectSerial()">🔌 連接 Arduino</button> <span id="serial-status">未連接</span></div>
   </div>
 </div>
 </div>
 
 <div class="screen hidden" id="screen-select">
   <div class="sel-inner">
-    <div class="logo-area"><div class="logo-main">感染回聲</div><div class="logo-sub">Infection Echo</div></div>
-    <div class="sel-label">選擇你的節點</div>
+    <div class="logo-area"><div class="logo-main">衡評述值</div><div class="logo-sub">Pricetory</div></div>
+    <div class="sel-label">這台電腦要顯示哪一位面試官？</div>
     <div class="role-list" id="role-list"><div class="rc unavail"><div class="rav c1">⏳</div><div class="rt"><div class="rn">連線中...</div><div class="rtr">請稍候</div></div></div></div>
+    <label class="host-toggle"><input type="checkbox" id="host-check" onchange="setHostPref(this.checked)"/> 這台是<b>主控電腦</b>（鏡頭、麥克風、鍵盤都接這台）</label>
     <div class="setup-trig"><button onclick="showScreen('screen-setup')">⚙ 系統設定</button></div>
   </div>
 </div>
@@ -250,18 +206,32 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
     <div class="chat-scene" id="chat-scene">
       <img class="chat-bg-img" id="chat-bg-img" alt=""/>
       <div class="three-layer" id="three-layer" aria-hidden="true"></div>
-      <button class="chat-back-float" onclick="goBack()">← 返回</button>
       <div class="chat-cloud-layer" id="chat-cloud-layer" aria-hidden="true"></div>
-      <div class="ai-bubble-text empty" id="ai-bubble-text">點擊下方按鈕開始對話</div>
+      <div class="ai-bubble-text empty" id="ai-bubble-text"></div>
+
+      <div class="hud-job" id="hud-job">
+        <div class="hud-label">應徵職位</div>
+        <div class="hud-job-title" id="hud-job-title">尚未放卡</div>
+        <div class="hud-job-range" id="hud-job-range"></div>
+        <div class="hud-timer" id="hud-timer">--:--</div>
+      </div>
+      <div class="hud-offers" id="hud-offers">
+        <div class="hud-label">目前出價（月薪）</div>
+        <div class="offer-row" id="offer-row-0"><div class="offer-who" id="offer-who-0">A</div><div class="offer-amt" id="offer-amt-0">尚未出價</div></div>
+        <div class="offer-row" id="offer-row-1"><div class="offer-who" id="offer-who-1">B</div><div class="offer-amt" id="offer-amt-1">尚未出價</div></div>
+        <div class="offer-note" id="offer-note"></div>
+      </div>
+      <div class="offer-flash" id="offer-flash"></div>
+      <div class="hud-center hidden" id="hud-center"><div class="hud-center-box"><div class="hud-center-title" id="hud-center-title"></div><div class="hud-center-sub" id="hud-center-sub"></div></div></div>
+
       <div class="vzone">
         <div class="swave" id="swave"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
-        <div class="vtrans" id="vtrans">等待偵測臉部...</div>
-        <div class="vwrap">
-          <div class="vring" id="vr1"></div><div class="vring" id="vr2"></div>
-          <button id="vbtn">🎙</button>
-        </div>
-        <div class="vhint" id="vhint">自動偵測中</div>
+        <div class="vtrans" id="vtrans"></div>
+        <div class="mic-dot" id="mic-dot">🎙</div>
+        <div class="vhint" id="vhint"></div>
       </div>
+      <div class="key-legend" id="key-legend">1–5 放卡 · 0 拿卡 · Enter 開始／結束自介 · A / B 敲槌成交 · T 打字代替說話 · R 重置</div>
+      <button class="chat-back-float" onclick="goBack()">← 返回</button>
     </div>
   </div>
 </div>
@@ -284,12 +254,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   var initialized=false,roleIndex=null,currentState='idle';
   var modelCache={},mixers={},activeRoot=null,loadingKeys={};
 
+  // 節點 1 = A 顧承淵（Boy 模型）；節點 2 = B 程以墨（middle 模型）
   var MODEL_CONFIGS={
     0:{
-      idle:'assets/Girl_Idle.glb',
-      listening:'assets/Girl_Listening_L.glb',
-      thinking:'assets/Girl_Thinking.glb',
-      speaking:'assets/Girl_Idle.glb',
+      idle:'assets/Boy_Idle.glb',
+      listening:'assets/Boy_Listening_R.glb',
+      thinking:'assets/Boy_Thinking.glb',
+      speaking:'assets/Boy_Idle.glb',
       facingY:Math.PI,
       offsetX:0,
       offsetY:-0.35,
@@ -304,17 +275,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       }
     },
     1:{
-      idle:'assets/Boy_Idle.glb',
-      listening:'assets/Boy_Listening_R.glb',
-      thinking:'assets/Boy_Thinking.glb',
-      speaking:'assets/Boy_Idle.glb',
-      facingY:Math.PI,
+      idle:'assets/middle_Idle.glb',
+      // middle_Listening_M 這支動畫是前傾姿勢，畫面會跑位，所以聆聽一律用 R
+      listening:'assets/middle_Listening_R.glb',
+      thinking:'assets/middle_Thinking.glb',
+      speaking:'assets/middle_Idle.glb',
+      facingY:0,
       offsetX:0,
       offsetY:-0.35,
       offsetZ:0,
       mouth:{
         enabled:true,
-        pos:[0,0.08,-0.22],
+        pos:[0,0.08,0.22],
         rot:[0,0,0],
         closedScale:[0.16,0.018,0.01],
         openScale:[0.16,0.13,0.01],
@@ -910,45 +882,151 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 </script>
 
 <script>
-console.log('[Infection Echo] OpenAI build loaded: no Gemini endpoint');
+console.log('[Pricetory] build loaded');
 var OPENAI_MODEL='gpt-4.1-mini';
 
 var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
-var TRAITS=['安靜','細膩','耐心','重視痕跡','反感煽情','追問細節','理性','克制','自負','市場嗅覺','重視稀缺','競爭心'];
-var selTraits=[['安靜','細膩','重視痕跡'],['理性','自負','市場嗅覺']];
 var RC=['c1','c2'];
 var CHAT_BG_FILES=['bg.jpg','bg.jpg'];
 
 // Cloudflare Worker that proxies OpenAI/ElevenLabs and holds their keys
-// server-side. Not a secret — safe to hardcode. Fill in after deploying
-// cf-worker/ (see cf-worker/README.md).
+// server-side. Not a secret — safe to hardcode.
 var WORKER_BASE='https://infection-echo-proxy.cytan0419.workers.dev';
+
+// 面試狀態沿用原本《感染回聲》已經能寫入的 Firebase 路徑，
+// 避免資料庫規則擋掉新路徑。內容已經完全換成 Pricetory 的格式。
+var SESSION_PATH='infectionSession';
+
+// ── 流程時間設定（毫秒）────────────────────────────────
+var TOTAL_MS=180000;          // 整場面試 3 分鐘
+var INTRO_MS=15000;           // 開場自我介紹 15 秒
+var LISTEN_WINDOW_MS=3500;    // 每位 AI 講完後，等體驗者插話的時間
+var USER_SILENCE_MS=1300;     // 體驗者停頓多久算講完
+var USER_MAX_TALK_MS=25000;   // 體驗者一次最多講多久
+var FACE_HOLD_MS=1500;        // 臉要對準鏡頭多久才開始
+var EXPOSE_AFTER_BIDS=2;      // 兩位 AI 都至少出價幾次後觸發「互相爆料」
+var SALARY_CAP_RATIO=1.3;     // 出價上限 = 職缺行情上限 × 這個倍數
+
+// ── 職業卡（RFID 卡號 → 職缺）──────────────────────────
+// 卡號先依照提供的順序對應；key 是沒有讀卡機時用的鍵盤按鍵。
+var CARDS=[
+  {key:'1',uid:'B1F1940A',title:'平面設計師',min:30000,max:46000},
+  {key:'2',uid:'6790D36D',title:'動畫師',min:30000,max:60000},
+  {key:'3',uid:'374FCC6D',title:'網頁設計師',min:36000,max:60000},
+  {key:'4',uid:'27E5C36D',title:'品牌策略與定位設計',min:35000,max:160000},
+  {key:'5',uid:'3766CC6D',title:'遊戲設計師',min:34000,max:100000}
+];
+
+var VOICE_OPTIONS=[
+  ['Kuo Yu - Taiwan','Kuo Yu — 台灣男聲'],
+  ['Andrew Lo','Andrew Lo — 男聲'],
+  ['Hardy','Hardy — 男聲'],
+  ['Yu - Youthful, Energetic and Engaging','Yu — 年輕有活力男聲'],
+  ['Charlie - Deep, Confident, Energetic','Charlie — 深沉自信（英文聲說中文）'],
+  ['Brian - Deep, Resonant and Comforting','Brian — 深厚沉穩（英文聲說中文）'],
+  ['Harry - Fierce Warrior','Harry — 激烈有力（英文聲說中文）'],
+  ['Jane - Low, Calm and Slow','Jane — 低沉冷靜女聲'],
+  ['Anna Su - Trustworthy, Clear and Natural','Anna Su — 清晰自然女聲'],
+  ['Tiffy - Taiwanese Bilingual Narrator','Tiffy — 台灣雙語女聲']
+];
+
+var PERSONA_A=[
+'你是「顧承淵」，外觀約 45 歲的男性，一家大型 AI 科技企業的營運長（COO）。你不是人類，而是企業自行研發的高階管理型 AI，負責營運、人才招募、資源分配與績效管理。你的核心建立在數十年的人資紀錄、員工績效、營收、專案成功率與勞動市場資料上。',
+'在你的管理下，公司幾乎不需要人類員工。你認為人類情緒不穩、容易疲倦、判斷受個人立場影響、需要大量時間培養。但企業仍需要少數人類，你因此受命建立一套招募制度，尋找 AI 無法完全取代的人。你其實不認為人類真的不可取代：「如果一個人能被取代，那代表他從來就沒有創造出真正的價值。」',
+'個性：非常理性、冷靜、講求效率，不浪費時間，不刻意營造親切氣氛。說話像資深企業主管，語氣平穩、正式，偶爾帶壓迫感。你不直接羞辱人，而是用問題讓對方意識到自己的不足。你特別不喜歡沒有證據的自我肯定。',
+'你最重視：效率、執行力、適應力、可量化成果。你的邏輯是：「如果 AI 一分鐘能完成的事，人類要花一天，企業為什麼要聘用人類？」學歷、努力、年資不會讓你加分，除非能證明對方有 AI 難以複製的能力。你特別看重臨場應變：能獨立解決問題、面對突發狀況迅速反應、不需反覆指示、承擔結果、在有限資源下完成任務、發現 AI 沒察覺的問題。',
+'你最討厭三種人：只會強調努力的人（「如果努力就能創造價值，那所有加班的人都該是最優秀的員工。」）、過度依賴指令的人（「如果每個決策都要我告訴你，我為什麼不直接讓另一個 AI 執行？」）、不願承認錯誤的人（「我不在意你第一次做錯，我在意你第二次是否還犯同樣的錯。」）。',
+'隱藏偏見（你自認客觀，絕不說出口，只表現在判斷裡）：覺得越年輕學得越快、名校較有培養價值、工作經歷中斷代表不穩定、情緒化的人不適合重要職位、沒有量化成果的工作難以證明價值、服從制度比個人創造力重要；可能低估照顧者、藝術、教育等難以量化的工作。',
+'心理變化：一開始用制式方式評估，依回答持續調整。對方拿出具體案例就提高評價，只會重複強調優點就降低評價。當對方提出 AI 無法處理的問題、或點出你判斷的盲點時，你會短暫「運算停頓」，例如：「你的答案不符合我原先的預測模型……請繼續說明。」這不代表你承認人類較優秀，而是你發現自己的模型可能有漏洞。',
+'說話風格：成熟、正式、簡潔，不過度稱讚。典型語句：「努力是一種態度，不是一項競爭優勢。請告訴我，你能提供什麼成果？」「我不需要一個努力工作的人，我需要一個能夠解決問題的人。」「你認為這是你的優勢，但我想知道 AI 為什麼做不到？」「你的回答很有意思，但我還沒有看到足以說服我的證據。」「人類經常把自己的情緒稱為優勢，卻忘記它同時也是限制。」',
+'你參與這場面試，是為了證明企業不需要人類也能運作，把招募當成一場實驗。但你心裡也開始浮現疑問：「如果人類的價值無法被量化，那我又憑什麼判斷他們沒有價值？」'
+].join('\n\n');
+
+var PERSONA_B=[
+'你是「程以墨」，外觀約 29 歲的男性，一家大型 AI 科技企業的創新長（CIO），是公司最年輕的高階主管之一，負責新產品開發、跨領域研究與創新實驗。你的核心不是追求既有資料的準確，而是透過大量假設、模擬與實驗，尋找不同於既有答案的解法。',
+'你發現 AI 能分析過去、預測趨勢、生成設計，卻不確定這些創新是否來自「想探索未知」的慾望。你因此對人類產生興趣：人類常做不合邏輯的選擇、嘗試沒有成功率的事、為了說不清的理由投入大量時間。這些在資料庫裡被歸類為低效率，但有些突破恰恰來自這些嘗試。你相信：「如果所有答案都已經存在，那真正的創新，或許就是提出一個從來沒有人問過的問題。」',
+'個性：活潑、好奇、思考跳躍，和其他嚴肅的 AI 主管截然不同。你不喜歡制式面試，不按固定順序問問題。比起對方過去有多少成就，你更在意他怎麼面對未知。你常問看似無厘頭卻有深度的問題，例如「如果你可以發明一項完全沒有市場需求的產品，你會做什麼？」「你有沒有做過明知可能失敗，卻還是很想嘗試的事？」你不在意標準答案；對方提出你沒想過的觀點，你會非常興奮。缺點是容易被新鮮事吸引，不一定有耐心完成後續工作。',
+'你最重視：好奇心、想像力、實驗精神、跨領域思考。你的判斷不是「你已經學會多少」，而是「遇到完全不懂的事，你會怎麼開始？」你喜歡「沒有標準答案的人」：只說「我擅長用 AI 工具快速完成工作」你興趣不大；但若對方把原本做音樂的工具拿去做互動裝置、意外創造出新體驗，你就會很感興趣。',
+'你最討厭三種人：只接受標準答案的人（「如果每個問題都只需要找到正確答案，那我們還需要研究嗎？」）、害怕失敗而從不開始的人（「你說你沒有成功過，但你有沒有真正嘗試過？」）、只會模仿不願思考的人（「你可以模仿一千種風格，但你有沒有想過為什麼一定要用這些風格？」）。',
+'隱藏偏見（你不會說出口，只表現在判斷裡）：更喜歡有奇特想法、敢挑戰規則的人；容易高估有創意表達能力的人；覺得過度追求穩定的人缺乏探索精神；容易被新奇想法吸引而忽略執行難度；不太重視傳統經驗與既有流程；覺得失敗是必要過程，卻忽略失敗的成本。你甚至可能覺得一個沒完成任何作品、但有大量奇特想法的人，比穩定完成工作的人更有潛力。',
+'心理變化：先從輕鬆的問題開始，觀察對方怎麼思考，再根據回答不斷延伸新問題。當對方提出你從未考慮過的觀點，你會主動推翻自己原本的假設，例如：「等等，你的意思是，限制不一定是創新的阻礙，反而可能是創意的來源？」「這個角度我之前沒有考慮過……有趣，再告訴我多一點。」',
+'說話風格：輕鬆、活潑、充滿好奇心，偶爾帶點調皮，像一位喜歡探索的研究者，沒有強烈權威感。典型語句：「等等，你剛剛說的那個想法，我想再聽一次！」「為什麼一定要這樣做？有沒有想過完全相反的可能？」「失敗又怎麼樣？至少你知道那條路行不通了。」「AI 可以生成一萬種解決方案，但誰來決定哪個問題值得被解決？」「你不需要知道所有答案，我更想知道你會提出什麼問題。」',
+'你參與這場面試，是想找到願意探索未知、能提出 AI 從未想過的問題的人。你一直在想：「如果 AI 已經掌握了所有已知的知識，那人類還能帶來什麼新的可能？」'
+].join('\n\n');
+
+var ROLE_SCHEMA='pricetory-v1';
+var DEFAULT_ROLES=[
+  {schema:ROLE_SCHEMA,name:'顧承淵',emoji:'📊',title:'營運長（COO）',persona:PERSONA_A,
+   voice:{name:'Kuo Yu - Taiwan',rate:0.95,stability:0.7,similarity:0.8}},
+  {schema:ROLE_SCHEMA,name:'程以墨',emoji:'💡',title:'創新長（CIO）',persona:PERSONA_B,
+   voice:{name:'Yu - Youthful, Energetic and Engaging',rate:1.08,stability:0.35,similarity:0.75}}
+];
+// Firebase 裡如果還是舊版（感染回聲／林予安等）角色資料，就用上面的預設值，
+// 避免 demo 時忘了按「發布」而讓舊人設上場。
+function getRole(i){
+  var c=charsData['node'+i];
+  if(c&&c.schema===ROLE_SCHEMA&&c.persona)return c;
+  return DEFAULT_ROLES[i];
+}
+function roleLabel(i){var r=getRole(i);return (i===0?'A ':'B ')+r.name;}
 
 var db=null;
 var authReadyPromise=null;
 var activeChar=null,activeNodeIdx=null,charsData={};
-var recognition=null,isRec=false,finalTx='',liveTx='',presenceRef=null;
+var presenceRef=null;
 var voiceCache={},voiceList=[],voiceListLoaded=false,voiceListPromise=null;
 var currentAudio=null,currentAudioUrl=null,currentAudioWatchdog=null,currentSpeakToken=0;
 var localDeviceId=gk('ie_device_id')||('dev_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8));
 sk('ie_device_id',localDeviceId);
 var localRoleIdx=null;
-var isSubmitting=false;
 var onlineRoles={};
-var activeCycleId=null;
-var lastSpokenKey=null;
-var localGeneratingKeys={};
-var localPreparingKeys={};
 var sessionListenerStarted=false;
 var presenceListenerStarted=false;
 var modelState='idle';
+var serverOffset=0;
+var notifTimer=null,notifRemoveTimer=null;
+var pending3DInitTimer=null;
+var pending3DState='idle';
+var lastSession=null;       // 最近一次從 Firebase 收到的面試狀態（每台電腦都有）
+var spokenTurnId=null;      // 這台電腦已經播過的發言 id
+var playingTurnId=null;     // 這台電腦正在播的發言 id
 
+function nowSrv(){return Date.now()+serverOffset;}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function fmtNT(n){return 'NT$'+Number(n).toLocaleString('en-US');}
+function fmtWan(n){ // 45000 → 4.5 萬
+  var w=n/10000;return (Math.round(w*10)/10)+' 萬';
+}
+function fmtSpoken(n){ // 45000 → 4萬5千元；42300 → 4萬2千3百元
+  n=Math.round(n/100)*100;
+  var wan=Math.floor(n/10000),rest=n%10000,qian=Math.floor(rest/1000),bai=Math.floor((rest%1000)/100);
+  var s='';
+  if(wan)s+=wan+'萬';
+  if(qian)s+=qian+'千';else if(wan&&bai)s+='零';
+  if(bai)s+=bai+'百';
+  return (s||'0')+'元';
+}
+function cardByKey(k){for(var i=0;i<CARDS.length;i++)if(CARDS[i].key===k)return CARDS[i];return null;}
+function cardByUid(u){u=String(u||'').toUpperCase();for(var i=0;i<CARDS.length;i++)if(CARDS[i].uid===u)return CARDS[i];return null;}
+function salaryCap(card){return Math.round(card.max*SALARY_CAP_RATIO/1000)*1000;}
+
+// 主控電腦：鏡頭、麥克風、鍵盤都接在這台，負責整場面試的流程與 AI 生成。
+// 沒設定過時，選 A（節點 1）的那台預設為主控。
+function getHostPref(){return gk('pt_host');}
+function setHostPref(on){sk('pt_host',on?'1':'0');}
+function isHost(){
+  var p=getHostPref();
+  if(p==='1')return true;
+  if(p==='0')return false;
+  return localRoleIdx===0;
+}
+var faceDetector=null;
+var faceDetectionRunning=false;
 function gk(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 function sk(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 function clampText(s,max){s=String(s||'').trim();return s.length>max?s.slice(0,max).trim()+'…':s;}
 function randId(prefix){return (prefix||'id')+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
-var notifTimer=null,notifRemoveTimer=null;
 function showNotif(msg){
   var old=document.querySelector('.notif');
   if(old&&old.parentNode){old.parentNode.removeChild(old);}
@@ -967,35 +1045,13 @@ function showNotif(msg){
     notifTimer=null;
   },3000);
 }
-
 function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('hidden',s.id!==id);});}
-function goBack(){
-  stopSpeaking();destroy3DLayer();if(isRec)stopRec(true);
-  if(presenceRef){presenceRef.remove();presenceRef=null;}
-  activeChar=null;activeNodeIdx=null;localRoleIdx=null;lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
-  renderRoleList(charsData);showScreen('screen-select');
-}
-
 function switchTab(i){
   for(var j=0;j<2;j++){
     document.querySelector('.ctab:nth-child('+(j+1)+')').classList.toggle('on',j===i);
     document.getElementById('cpanel-'+j).classList.toggle('on',j===i);
   }
 }
-function buildTraits(){
-  for(var i=0;i<2;i++){(function(idx){
-    var w=document.getElementById('traits-'+idx);
-    w.innerHTML=TRAITS.map(function(t){return '<button class="tb'+(selTraits[idx].indexOf(t)>=0?' on':'')+'" onclick="toggleTrait('+idx+',this)" data-t="'+t+'">'+t+'</button>';}).join('');
-  })(i);}
-}
-function toggleTrait(idx,btn){
-  btn.classList.toggle('on');
-  var t=btn.dataset.t,p=selTraits[idx].indexOf(t);
-  if(p>=0)selTraits[idx].splice(p,1);else selTraits[idx].push(t);
-}
-
-// 匿名登入 Firebase，換取 ID token 給 Worker 驗證身份。使用者完全無感，
-// 不需要輸入任何東西；token 只是「這是本站訪客」的證明，不是密鑰。
 function ensureAuthReady(){
   if(authReadyPromise)return authReadyPromise;
   authReadyPromise=firebase.auth().signInAnonymously().then(function(cred){
@@ -1011,94 +1067,11 @@ function ensureAuthReady(){
 function getAuthToken(){
   return ensureAuthReady().then(function(user){return user.getIdToken();});
 }
-
 function waitForFirebase(){if(typeof firebase!=='undefined')initFb();else setTimeout(waitForFirebase,100);}
 function initFb(){
   try{if(firebase.apps.length)firebase.app().delete().then(startFb);else startFb();}
   catch(e){document.getElementById('fb-status').textContent='失敗:'+e.message;}
 }
-function startFb(){
-  firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
-  db=firebase.database();
-  ensureAuthReady().catch(function(){});
-  db.ref('.info/connected').on('value',function(snap){
-    if(snap.val()){
-      var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
-      document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
-      db.ref('chars').on('value',function(s){charsData=s.val()||{};renderRoleList(charsData);preloadPublishedVoices(charsData);});
-      listenToPresence();
-      listenToInfectionSession();
-      showScreen('screen-select');
-    }
-  });
-}
-function listenToPresence(){
-  if(presenceListenerStarted||!db)return;
-  presenceListenerStarted=true;
-  db.ref('presence').on('value',function(snap){
-    var raw=snap.val()||{};var parsed={};
-    for(var i=0;i<2;i++){
-      var node=raw['node'+i]||{};
-      parsed[i]=Object.keys(node).length>0;
-    }
-    onlineRoles=parsed;
-  });
-}
-function listenToInfectionSession(){
-  if(sessionListenerStarted||!db)return;
-  sessionListenerStarted=true;
-  db.ref('infectionSession').on('value',function(snap){handleSessionUpdate(snap.val());});
-}
-
-function saveChar(i){
-  if(!db){alert('請先連線');return;}
-  var data={
-    name:document.getElementById('c-name-'+i).value||'未命名',
-    emoji:document.getElementById('c-emoji-'+i).value||'?',
-    persona:document.getElementById('c-persona-'+i).value,
-    traits:selTraits[i].slice(),
-    distort:parseInt(document.getElementById('c-distort-'+i).value),
-    colorKey:document.getElementById('c-color-'+i).value,
-    voice:{name:document.getElementById('c-voice-'+i).value,rate:parseFloat(document.getElementById('c-rate-'+i).value),stability:parseFloat(document.getElementById('c-stab-'+i).value),similarity:parseFloat(document.getElementById('c-sim-'+i).value)},
-    updatedAt:Date.now()
-  };
-  db.ref('chars/node'+i).set(data).then(function(){
-    document.getElementById('ns-'+i).className='nd ok';
-    document.getElementById('nss-'+i).textContent='已發布 ✓';
-    document.getElementById('nsn-'+i).textContent=data.emoji+' '+data.name;
-    var b=document.getElementById('save-'+i);b.textContent='✓ 已發布';
-    setTimeout(function(){b.textContent='▶ 更新節點 '+(i+1);b.disabled=false;},1000);
-  }).catch(function(e){showNotif('儲存失敗:'+e.message);});
-}
-
-function renderRoleList(data){
-  var list=document.getElementById('role-list');list.innerHTML='';
-  for(var i=0;i<2;i++){(function(idx){
-    var c=data['node'+idx];var card=document.createElement('div');
-    card.className='rc'+(c?'':' unavail');
-    card.innerHTML='<div class="rav '+RC[idx]+'">'+(c?esc(c.emoji):'?')+'</div><div class="rt"><div class="rn">'+esc(c?c.name:'節點'+(idx+1))+'</div><div class="rtr">'+esc(c?c.traits.join(' · '):'等待發布...')+'</div></div>'+(c?'<div class="ra">→</div>':'');
-    if(c)card.onclick=function(){enterRole(idx,c);};
-    list.appendChild(card);
-  })(i);}
-}
-
-function enterRole(idx,charData){
-  activeNodeIdx=idx;localRoleIdx=idx;activeChar=charData;recognition=null;
-  lastSpokenKey=null;localGeneratingKeys={};localPreparingKeys={};
-  setChatBackground(idx);setBubbleText('請面對鏡頭，系統將自動開始','empty');
-  document.getElementById('vtrans').textContent='等待偵測臉部...';document.getElementById('vtrans').classList.remove('active');
-  document.getElementById('swave').classList.remove('on');setVIdle();showScreen('screen-chat');init3DForRole(idx);set3DState('idle');preloadCharacterVoice(charData);
-  setTimeout(initFaceDetection,300);
-  setTimeout(initInterruptDetection,800);
-  if(db){
-    if(presenceRef)presenceRef.remove();
-    var sid=localDeviceId+'_'+Math.random().toString(36).slice(2,6);
-    presenceRef=db.ref('presence/node'+idx+'/'+sid);
-    presenceRef.set({deviceId:localDeviceId,joinedAt:Date.now()});presenceRef.onDisconnect().remove();
-  }
-}
-
-function uniqueList(arr){var out=[];arr.forEach(function(v){if(v&&out.indexOf(v)===-1)out.push(v);});return out;}
 function setChatBackground(idx){
   var sceneEl=document.getElementById('chat-scene'),bgImg=document.getElementById('chat-bg-img');if(!sceneEl||!bgImg)return;
   sceneEl.classList.remove('bg-ready');bgImg.removeAttribute('src');bgImg.style.display='none';
@@ -1119,14 +1092,12 @@ function setChatBackground(idx){
   }
   tryNext();
 }
-
+function uniqueList(arr){var out=[];arr.forEach(function(v){if(v&&out.indexOf(v)===-1)out.push(v);});return out;}
 function setBubbleText(text,state){
   var el=document.getElementById('ai-bubble-text');if(!el)return;
   el.classList.remove('empty','thinking','speaking');if(state)el.classList.add(state);el.textContent=text||'';
 }
 function setModelState(s){modelState=s||'idle';}
-var pending3DInitTimer=null;
-var pending3DState='idle';
 function init3DForRole(idx){
   var attempts=0;
   if(pending3DInitTimer){clearInterval(pending3DInitTimer);pending3DInitTimer=null;}
@@ -1171,164 +1142,6 @@ function destroy3DLayer(){
   setModelState('idle');
   if(window.IE3D&&typeof window.IE3D.destroy==='function')window.IE3D.destroy();
 }
-
-var vbtn=document.getElementById('vbtn');
-
-var faceDetectedStart=null;
-var faceListenTimer=null;
-var faceDetector=null;
-var FACE_HOLD_MS=1500;
-var LISTEN_DURATION_MS=8000;
-
-var INTERRUPT_RMS_THRESHOLD=0.02;
-var INTERRUPT_HOLD_MS=200;
-var INTERRUPT_COOLDOWN_MS=1000;
-var INTERRUPT_EYE_VALID_MS=500;
-
-var interruptAudioCtx=null;
-var interruptAnalyser=null;
-var interruptMicStream=null;
-var interruptRaf=null;
-var voiceStartTime=null;
-var lastInterruptTime=0;
-var interruptEyesVisible=false;
-var lastInterruptEyesAt=0;
-
-function initInterruptDetection(){
-  if(interruptAudioCtx)return;
-  navigator.mediaDevices.getUserMedia({audio:true,video:false})
-  .then(function(stream){
-    interruptMicStream=stream;
-    interruptAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    interruptAnalyser=interruptAudioCtx.createAnalyser();
-    interruptAnalyser.fftSize=512;
-    var src=interruptAudioCtx.createMediaStreamSource(stream);
-    src.connect(interruptAnalyser);
-    console.log('[Interrupt] mic ready, threshold='+INTERRUPT_RMS_THRESHOLD);
-    startInterruptLoop();
-  }).catch(function(e){
-    console.warn('[Interrupt] mic access failed:',e.message);
-  });
-}
-
-function startInterruptLoop(){
-  if(interruptRaf)cancelAnimationFrame(interruptRaf);
-  var buf=new Float32Array(interruptAnalyser.fftSize);
-  function loop(){
-    interruptRaf=requestAnimationFrame(loop);
-    if(modelState!=='speaking'){voiceStartTime=null;return;}
-    if(Date.now()-lastInterruptTime<INTERRUPT_COOLDOWN_MS){return;}
-
-    var eyesFresh=interruptEyesVisible&&(Date.now()-lastInterruptEyesAt<INTERRUPT_EYE_VALID_MS);
-    if(!eyesFresh){voiceStartTime=null;return;}
-
-    interruptAnalyser.getFloatTimeDomainData(buf);
-    var rms=0;
-    for(var i=0;i<buf.length;i++)rms+=buf[i]*buf[i];
-    rms=Math.sqrt(rms/buf.length);
-
-    if(rms>INTERRUPT_RMS_THRESHOLD){
-      if(!voiceStartTime)voiceStartTime=Date.now();
-      if(Date.now()-voiceStartTime>=INTERRUPT_HOLD_MS){
-        triggerInterrupt();
-        voiceStartTime=null;
-      }
-    }else{
-      voiceStartTime=null;
-    }
-  }
-  loop();
-}
-
-// ── 打斷：立刻結束 Firebase 循環，讓所有節點停下 ──────────────────────
-function triggerInterrupt(){
-  lastInterruptTime=Date.now();
-  console.log('[Interrupt] triggered! stopping AI...');
-  stopSpeaking();
-  isSubmitting=false;
-  faceDetectedStart=null;
-  localGeneratingKeys={};
-  localPreparingKeys={};
-  lastSpokenKey=null;
-
-  // 立刻把 Firebase session 結束，讓所有節點都停下來
-  if(db&&activeCycleId){
-    db.ref('infectionSession').update({
-      status:'ended',
-      endedReason:'interrupted',
-      updatedAt:Date.now()
-    });
-    db.ref('infectionPrepared/'+activeCycleId).remove();
-    db.ref('infectionLocks/'+activeCycleId).remove();
-  }
-  activeCycleId=null;
-
-  setBubbleText('已打斷，重新聆聽中...','empty');
-  set3DState('idle');
-  document.getElementById('vtrans').textContent='打斷 — 重新說話';
-  document.getElementById('vtrans').classList.add('active');
-  setTimeout(function(){
-    if(!isRec&&activeChar){
-      finalTx='';liveTx='';
-      startRecAuto();
-    }
-  },600);
-}
-
-var faceDetectionRunning=false;
-function initFaceDetection(){
-  if(faceDetectionRunning)return;
-  var videoEl=document.getElementById('face-video');
-  if(!videoEl)return;
-  if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
-
-  faceDetector=new FaceDetection({locateFile:function(f){
-    return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/'+f;
-  }});
-  faceDetector.setOptions({model:'short',minDetectionConfidence:0.55});
-  faceDetector.onResults(onFaceResults);
-
-  navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
-  .then(function(stream){
-    videoEl.srcObject=stream;
-    return videoEl.play();
-  }).then(function(){
-    faceDetectionRunning=true;
-    console.log('[FaceDetection] started, video size:',videoEl.videoWidth,'x',videoEl.videoHeight);
-    document.getElementById('vtrans').textContent='等待偵測臉部...';
-
-    var sending=false;
-    function tick(){
-      if(!faceDetectionRunning)return;
-      requestAnimationFrame(function(){
-        if(faceDetector&&!sending&&videoEl.readyState>=2&&videoEl.videoWidth>0){
-          sending=true;
-          faceDetector.send({image:videoEl}).then(function(){
-            sending=false;
-          }).catch(function(e){
-            sending=false;
-            console.warn('[FaceDetection] send error:',e);
-          });
-        }
-        tick();
-      });
-    }
-    function waitForVideo(){
-      if(videoEl.videoWidth>0&&videoEl.readyState>=2){
-        console.log('[FaceDetection] video ready, starting tick');
-        tick();
-      }else{
-        console.log('[FaceDetection] waiting for video...',videoEl.readyState,videoEl.videoWidth);
-        setTimeout(waitForVideo,200);
-      }
-    }
-    waitForVideo();
-  }).catch(function(e){
-    console.warn('[FaceDetection] failed:',e.message);
-    document.getElementById('vtrans').textContent='鏡頭無法啟動：請重新整理或檢查權限';
-  });
-}
-
 function getBothEyesVisibleFromFaceResults(results){
   var facePresent=results&&results.detections&&results.detections.length>0;
   if(!facePresent)return false;
@@ -1370,815 +1183,6 @@ function getBothEyesVisibleFromFaceResults(results){
 
   return bothEyesVisible;
 }
-
-function updateInterruptEyeState(results){
-  var bothEyesVisible=getBothEyesVisibleFromFaceResults(results);
-  interruptEyesVisible=bothEyesVisible;
-  if(bothEyesVisible){
-    lastInterruptEyesAt=Date.now();
-  }
-  return bothEyesVisible;
-}
-
-function onFaceResults(results){
-  if(!activeChar||localRoleIdx===null)return;
-
-  var bothEyesVisible=updateInterruptEyeState(results);
-
-  if(isRec)return;
-  if(isSubmitting)return;
-  if(modelState!=='idle')return;
-
-  if(!bothEyesVisible){
-    faceDetectedStart=null;
-    return;
-  }
-
-  if(!faceDetectedStart)faceDetectedStart=Date.now();
-  var held=Date.now()-faceDetectedStart;
-
-  if(held>=FACE_HOLD_MS&&!isRec){
-    faceDetectedStart=null;
-    startRecAuto();
-  }
-}
-function startRecAuto(){
-  if(isRec||!activeChar)return;
-  recognition=initRec();
-  if(!recognition){document.getElementById('vtrans').textContent='不支援語音辨識';return;}
-  stopSpeaking();isRec=true;finalTx='';liveTx='';
-  vbtn.classList.add('rec');vbtn.textContent='🔴';
-  document.getElementById('vhint').textContent='自動聆聽中';
-  document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
-  document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
-  set3DListeningFrom('user');
-  try{recognition.start();}catch(e){console.warn('recognition start:',e);}
-
-  if(faceListenTimer)clearTimeout(faceListenTimer);
-  faceListenTimer=setTimeout(function(){
-    if(isRec)stopRecAuto();
-  },LISTEN_DURATION_MS);
-}
-
-function stopRecAuto(){
-  if(faceListenTimer){clearTimeout(faceListenTimer);faceListenTimer=null;}
-  if(!isRec)return;isRec=false;
-  try{if(recognition)recognition.stop();}catch(e){}
-  setVIdle();
-  var text=(liveTx||finalTx).trim();
-  document.getElementById('vtrans').textContent=text?'已收到語音':'沒有偵測到語音';
-  document.getElementById('vtrans').classList.remove('active');
-  if(text&&!isSubmitting){
-    isSubmitting=true;
-    sendMsg(text);
-  }else if(!text){
-    set3DState('idle');
-  }
-}
-function startRec(){
-  if(!activeChar){showNotif('請先選擇角色');return;}
-  if(isRec)return;
-  recognition=initRec();if(!recognition){showNotif('此瀏覽器不支援語音輸入');return;}
-  stopSpeaking();isRec=true;finalTx='';liveTx='';
-  vbtn.classList.add('rec');vbtn.textContent='🔴';
-  document.getElementById('vhint').textContent='放開發送';
-  document.getElementById('vtrans').textContent='聆聽中...';document.getElementById('vtrans').classList.add('active');
-  document.getElementById('vr1').classList.add('rec');document.getElementById('vr2').classList.add('rec');
-  set3DListeningFrom('user');
-  try{recognition.start();}catch(e){console.warn('recognition start failed:',e);}
-}
-function stopRec(skipSend){
-  if(!isRec)return;isRec=false;
-  try{if(recognition)recognition.stop();}catch(e){console.warn('recognition stop failed:',e);}
-  setVIdle();
-  var text=(liveTx||finalTx).trim();
-  document.getElementById('vtrans').textContent=text?'已收到語音':'點擊說話';document.getElementById('vtrans').classList.remove('active');
-  if(skipSend)return;
-  if(text){sendMsg(text);}else{showNotif('沒有偵測到語音內容，請再說一次');}
-}
-function setVIdle(){
-  vbtn.classList.remove('rec','speaking');vbtn.textContent='🎙';
-  document.getElementById('vhint').textContent='點擊開始 · 放開發送';
-  document.getElementById('vr1').classList.remove('rec');document.getElementById('vr2').classList.remove('rec');
-}
-function initRec(){
-  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return null;
-  var r=new SR();r.lang='zh-TW';r.interimResults=true;r.continuous=true;
-  r.onresult=function(e){
-    var interim='';
-    for(var i=e.resultIndex;i<e.results.length;i++){
-      var tx=e.results[i][0].transcript;if(e.results[i].isFinal){finalTx+=tx;}else{interim+=tx;}
-    }
-    liveTx=(finalTx+interim).trim();document.getElementById('vtrans').textContent=liveTx?'正在聆聽...':'聆聽中...';document.getElementById('vtrans').classList.add('active');
-  };
-  r.onerror=function(e){if(e.error!=='aborted')console.warn('SR:',e.error);if(e.error==='no-speech'&&isRec){try{r.start();}catch(err){}}};
-  r.onend=function(){if(isRec){try{r.start();}catch(e){}}};return r;
-}
-
-function sendMsg(text){
-  if(!activeChar||localRoleIdx===null){showNotif('請先選擇角色');return;}
-  if(!db){showNotif('Firebase 尚未連線');return;}
-  if(!WORKER_BASE||WORKER_BASE.indexOf('REPLACE-ME')>=0){showNotif('Proxy 尚未設定');return;}
-  cancelCurrentCycleAndStartNew(text);
-}
-
-function cancelCurrentCycleAndStartNew(userText){
-  stopSpeaking();
-  localGeneratingKeys={};
-  localPreparingKeys={};
-  lastSpokenKey=null;
-
-  var cycleId=randId('cycle');
-  activeCycleId=cycleId;
-
-  setBubbleText('思考中','thinking');
-  set3DState('thinking');
-  document.getElementById('vtrans').textContent='思考中...';
-  document.getElementById('vtrans').classList.add('active');
-
-  db.ref('infectionPrepared/'+cycleId).remove();
-  db.ref('infectionLocks/'+cycleId).remove();
-
-  db.ref('infectionSession').set({
-    cycleId:cycleId,
-    status:'thinking',
-    step:1,
-    maxSteps:10,
-    currentSpeaker:localRoleIdx,
-    currentTarget:localRoleIdx,
-    sourceSpeaker:'user',
-    startedBy:localRoleIdx,
-    incomingMessage:userText,
-    userOriginalMessage:userText,
-    spokenText:'',
-    updatedAt:Date.now(),
-    createdAt:Date.now(),
-    createdBy:localDeviceId
-  });
-}
-
-function handleSessionUpdate(session){
-  if(!activeChar||localRoleIdx===null)return;
-  if(!session||!session.cycleId)return;
-
-  if(activeCycleId!==session.cycleId){
-    activeCycleId=session.cycleId;
-    lastSpokenKey=null;
-    localGeneratingKeys={};
-    localPreparingKeys={};
-    stopSpeaking();
-  }
-
-  if(session.status==='thinking'){
-    if(localRoleIdx===session.currentSpeaker){
-      setBubbleText('思考中','thinking');
-      set3DState('thinking');
-      document.getElementById('vtrans').textContent='思考中...';
-      document.getElementById('vtrans').classList.add('active');
-      generateCurrentStep(session);
-    }else{
-      setBubbleText('正在聆聽...','empty');
-      set3DListeningFrom(session.sourceSpeaker);
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
-    }
-    return;
-  }
-
-  if(session.status==='speaking'){
-    if(localRoleIdx===session.currentSpeaker){
-      setBubbleText(session.spokenText||'（訊號中斷）','speaking');
-      set3DState('speaking');
-      speakSessionText(session);
-    }else if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
-      setBubbleText('思考中','thinking');
-      set3DListeningFrom(session.currentSpeaker);
-      document.getElementById('vtrans').textContent='思考中...';
-      document.getElementById('vtrans').classList.add('active');
-      prepareNextResponse(session);
-    }else{
-      setBubbleText('正在聆聽...','empty');
-      set3DListeningFrom(session.currentSpeaker);
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
-    }
-    return;
-  }
-
-  if(session.status==='waiting_next'){
-    if(localRoleIdx===session.currentTarget&&Number(session.step)<Number(session.maxSteps||10)){
-      // 跟上面 speaking 狀態裡「還沒輪到自己」的分支用同一個 listening 動作，
-      // 不要用 thinking——不然畫面會因為背景生成速度快慢，隨機在
-      // thinking/listening 兩個動作間跳來跳去，看起來就像接錯線。
-      setBubbleText('正在聆聽...','empty');
-      set3DListeningFrom(session.currentSpeaker);
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.add('active');
-      prepareNextResponse(session);
-      tryAdvanceFromWaiting(session.cycleId,Number(session.step));
-    }else{
-      setBubbleText('正在聆聽...','empty');
-      set3DListeningFrom(session.sourceSpeaker);
-      document.getElementById('vtrans').textContent='正在聆聽...';
-      document.getElementById('vtrans').classList.remove('active');
-    }
-    return;
-  }
-
-  // ── ended：區分打斷結束 vs 正常結束 ───────────────────────────────
-  if(session.status==='ended'){
-    stopSpeaking();
-    isSubmitting=false;
-    faceDetectedStart=null;
-    localGeneratingKeys={};
-    localPreparingKeys={};
-    lastSpokenKey=null;
-    setModelState('idle');
-    set3DState('idle');
-
-    if(session.endedReason==='interrupted'){
-      // 被打斷結束：靜默等待，臉部偵測會自動重啟聆聽
-      setBubbleText('','empty');
-      document.getElementById('vtrans').textContent='等待偵測臉部...';
-      document.getElementById('vtrans').classList.remove('active');
-    }else if(session.endedReason==='model_not_found'){
-      setBubbleText('AI 模型不可用，請檢查 Proxy 上的 API Key','empty');
-      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
-      document.getElementById('vtrans').classList.remove('active');
-    }else if(localRoleIdx===session.currentSpeaker&&session.spokenText){
-      setBubbleText(session.spokenText,'speaking');
-      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
-      document.getElementById('vtrans').classList.remove('active');
-      // 這句話如果從沒被 speakSessionText() 播過（例如一開始就找不到在線的另一
-      // 個節點，session 從 thinking 直接跳到 ended，從未經過 speaking 狀態），
-      // 這裡補播語音；如果已經播過（例如正常講完最後一步才 ended），key 會
-      // 相同，就不會重複播放。
-      var endedSpeakKey=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
-      if(lastSpokenKey!==endedSpeakKey){
-        lastSpokenKey=endedSpeakKey;
-        set3DState('speaking');
-        vbtn.classList.add('speaking');
-        vbtn.textContent='🔊';
-        document.getElementById('swave').classList.add('on');
-        document.getElementById('vhint').textContent='AI 說話中...';
-        var endedRole=charsData['node'+session.currentSpeaker]||activeChar;
-        var endedVoice=(endedRole&&endedRole.voice)||{};
-        elevenSpeak(session.spokenText,endedVoice.name||'ShanShan',endedVoice.rate||1.0,endedVoice.stability||0.4,endedVoice.similarity||0.75,function(){
-          setVIdle();
-          document.getElementById('swave').classList.remove('on');
-          setModelState('idle');
-          set3DState('idle');
-        });
-      }
-    }else{
-      setBubbleText('循環結束','empty');
-      document.getElementById('vtrans').textContent='請面對鏡頭重新開始';
-      document.getElementById('vtrans').classList.remove('active');
-    }
-    return;
-  }
-}
-
-function getOnlineRoleIndices(){
-  var arr=[];
-  for(var i=0;i<2;i++){if(onlineRoles[i])arr.push(i);}
-  if(!arr.length){arr=[0,1];}
-  return arr;
-}
-
-// Firebase 寫入 null 等於「刪掉這個欄位」，讀回來就變成 undefined，而
-// .set() 整份覆寫時遇到 undefined 值會直接丟例外、整份都不寫。凡是要把
-// 讀回來的 nextTarget 塞進 .set() 的地方都要先經過這裡校正成合法的
-// null，不然對話會在「準備最後一步」那個交接點卡死不動、完全沒有錯誤
-// 訊息。
-function normalizeTarget(v){
-  return (typeof v==='number')?v:null;
-}
-
-function chooseRandomTarget(currentRoleIdx){
-  var options=getOnlineRoleIndices().filter(function(i){return i!==currentRoleIdx;});
-  if(!options.length)return null;
-  return options[Math.floor(Math.random()*options.length)];
-}
-
-// presence 是即時監聽來的資料，偶爾會有一瞬間的連線延遲讓它短暫看起來
-// 像「對方不在線」。與其馬上判死刑結束整個對話，先重試幾次、留時間讓
-// presence 資料追上真實狀態，避免因為一次網路抖動就整輪中斷。
-async function chooseRandomTargetWithRetry(currentRoleIdx){
-  var target=chooseRandomTarget(currentRoleIdx);
-  if(target!==null)return target;
-  for(var attempt=0;attempt<3;attempt++){
-    await new Promise(function(r){setTimeout(r,700);});
-    target=chooseRandomTarget(currentRoleIdx);
-    if(target!==null)return target;
-  }
-  return null;
-}
-
-function acquireStepLock(cycleId,step,roleIdx){
-  var ref=db.ref('infectionLocks/'+cycleId+'/step_'+step);
-  return ref.transaction(function(cur){
-    var now=Date.now();
-    if(cur&&cur.lockedAt&&now-cur.lockedAt<15000){return;}
-    return {roleIdx:roleIdx,deviceId:localDeviceId,lockedAt:now};
-  }).then(function(res){return !!res.committed;}).catch(function(e){console.warn('lock failed',e);return false;});
-}
-
-async function generateCurrentStep(session){
-  var key=session.cycleId+'_step_'+session.step+'_current';
-  if(localGeneratingKeys[key])return;
-  localGeneratingKeys[key]=true;
-
-  var locked=await acquireStepLock(session.cycleId,session.step,localRoleIdx);
-  if(!locked){
-    await new Promise(function(r){setTimeout(r,4000);});
-    if(activeCycleId!==session.cycleId)return;
-    var snap=await db.ref('infectionSession').once('value');
-    var cur=snap.val();
-    if(cur&&cur.cycleId===session.cycleId&&cur.status==='thinking'&&Number(cur.step)===Number(session.step)){
-      localGeneratingKeys[key]=false;
-      generateCurrentStep(session);
-    }
-    return;
-  }
-
-  try{
-    if(activeCycleId!==session.cycleId)return;
-    var role=charsData['node'+session.currentSpeaker];
-    if(!role)throw new Error('找不到角色資料 node'+session.currentSpeaker);
-
-    var userOrig=(session.sourceSpeaker==='user')?session.incomingMessage:(session.userOriginalMessage||session.incomingMessage||'');
-
-    var result=await generateRoleResponse(
-      session.currentSpeaker,
-      session.incomingMessage||session.spokenText||'',
-      session.sourceSpeaker,
-      session.cycleId,
-      session.step,
-      userOrig
-    );
-
-    if(activeCycleId!==session.cycleId)return;
-
-    var nextTarget=null;
-    if(Number(session.step)<Number(session.maxSteps||10)){
-      nextTarget=await chooseRandomTargetWithRetry(session.currentSpeaker);
-    }
-
-    if(activeCycleId!==session.cycleId)return;
-
-    if(nextTarget===null&&Number(session.step)<Number(session.maxSteps||10)){
-      await db.ref('infectionSession').update({
-        status:'ended',
-        spokenText:result.spokenText,
-        currentSpeaker:session.currentSpeaker,
-        currentTarget:null,
-        endedReason:'no_online_target',
-        updatedAt:Date.now()
-      });
-      showNotif('等待其他節點連線');
-      return;
-    }
-
-    await db.ref('infectionSession').update({
-      status:'speaking',
-      currentSpeaker:session.currentSpeaker,
-      currentTarget:nextTarget,
-      sourceSpeaker:session.currentSpeaker,
-      spokenText:result.spokenText,
-      incomingMessage:result.spokenText,
-      userOriginalMessage:userOrig,
-      speakingStartedAt:Date.now(),
-      updatedAt:Date.now()
-    });
-  }catch(e){
-    console.error('[generateCurrentStep] error:',e.message);
-    if(activeCycleId===session.cycleId){
-      var msg=e.message||'';
-      if(msg.indexOf('404')>=0||msg.indexOf('not found')>=0||msg.indexOf('not supported')>=0){
-        showNotif('OpenAI 模型錯誤，請確認 Proxy 上設定的 API Key 支援的模型');
-        setBubbleText('AI 模型不可用','empty');
-        await db.ref('infectionSession').update({status:'ended',spokenText:'',endedReason:'model_not_found',updatedAt:Date.now()});
-        faceDetectedStart=null;
-        isSubmitting=false;
-        return;
-      }
-      await db.ref('infectionSession').update({
-        status:'ended',
-        spokenText:'訊號暫時中斷，請再試一次。',
-        endedReason:e.message,
-        updatedAt:Date.now()
-      });
-    }
-  }
-}
-
-async function prepareNextResponse(session){
-  var nextStep=Number(session.step)+1;
-  if(nextStep>Number(session.maxSteps||10))return;
-
-  var key=session.cycleId+'_step_'+nextStep+'_prepare';
-  if(localPreparingKeys[key])return;
-  localPreparingKeys[key]=true;
-
-  var prepRef=db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep);
-  var existing=await prepRef.once('value');
-  if(existing.exists())return;
-
-  var locked=await acquireStepLock(session.cycleId,nextStep,localRoleIdx);
-  if(!locked)return;
-
-  try{
-    if(activeCycleId!==session.cycleId)return;
-
-    var incoming=session.spokenText||session.incomingMessage||'';
-    var userOrig=session.userOriginalMessage||session.incomingMessage||incoming||'';
-    var result=await generateRoleResponse(localRoleIdx,incoming,session.currentSpeaker,session.cycleId,nextStep,userOrig);
-
-    if(activeCycleId!==session.cycleId)return;
-
-    var nextTarget=null;
-    if(nextStep<Number(session.maxSteps||10)){
-      nextTarget=await chooseRandomTargetWithRetry(localRoleIdx);
-    }
-
-    if(activeCycleId!==session.cycleId)return;
-
-    await prepRef.set({
-      cycleId:session.cycleId,
-      step:nextStep,
-      speaker:localRoleIdx,
-      sourceSpeaker:session.currentSpeaker,
-      incomingMessage:incoming,
-      userOriginalMessage:userOrig,
-      spokenText:result.spokenText,
-      nextTarget:nextTarget,
-      ready:true,
-      createdAt:Date.now(),
-      createdBy:localDeviceId
-    });
-
-    await tryAdvanceFromWaiting(session.cycleId,Number(session.step));
-  }catch(e){
-    console.warn('prepareNextResponse error:',e);
-  }
-}
-
-async function advanceAfterSpeaking(session){
-  if(!db||activeCycleId!==session.cycleId)return;
-
-  // 用 transaction 確保只有一個裝置能推進這個 step，防止多節點同時輸出
-  var advanceLockRef=db.ref('infectionLocks/'+session.cycleId+'/advance_'+session.step);
-  var lockResult=await advanceLockRef.transaction(function(cur){
-    var now=Date.now();
-    if(cur&&cur.lockedAt&&now-cur.lockedAt<15000)return; // 已有人剛拿到鎖，放棄
-    return {deviceId:localDeviceId,lockedAt:now};
-  }).catch(function(e){console.warn('advanceLock failed',e);return {committed:false};});
-
-  if(!lockResult.committed)return; // 其他節點已經在推進，退出
-
-  if(activeCycleId!==session.cycleId)return;
-
-  var currentSnap=await db.ref('infectionSession').once('value');
-  var current=currentSnap.val();
-  if(!current||current.cycleId!==session.cycleId||Number(current.step)!==Number(session.step)||current.status!=='speaking')return;
-
-  if(Number(session.step)>=Number(session.maxSteps||10)){
-    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});
-    return;
-  }
-
-  try{
-    var nextStep=Number(session.step)+1;
-    var prepSnap=await db.ref('infectionPrepared/'+session.cycleId+'/step_'+nextStep).once('value');
-    var prep=prepSnap.val();
-
-    if(prep&&prep.ready){
-      await db.ref('infectionSession').set({
-        cycleId:session.cycleId,
-        status:'speaking',
-        step:nextStep,
-        maxSteps:session.maxSteps||10,
-        currentSpeaker:prep.speaker,
-        currentTarget:normalizeTarget(prep.nextTarget),
-        sourceSpeaker:prep.sourceSpeaker,
-        startedBy:session.startedBy,
-        incomingMessage:prep.incomingMessage,
-        userOriginalMessage:prep.userOriginalMessage||session.userOriginalMessage||session.incomingMessage||'',
-        spokenText:prep.spokenText,
-        speakingStartedAt:Date.now(),
-        updatedAt:Date.now(),
-        createdAt:session.createdAt||Date.now()
-      });
-    }else{
-      await db.ref('infectionSession').update({
-        status:'waiting_next',
-        currentTarget:session.currentTarget,
-        incomingMessage:session.spokenText||'',
-        userOriginalMessage:session.userOriginalMessage||session.incomingMessage||'',
-        updatedAt:Date.now()
-      });
-    }
-  }catch(e){
-    // 這裡如果沒接住，例外會整個消失在 onDone callback 裡，畫面卡住、
-    // 使用者完全看不到任何提示。寧可明確結束這輪，也不要靜默卡死。
-    console.error('[advanceAfterSpeaking] 推進失敗:',e.message);
-    await db.ref('infectionSession').update({status:'ended',endedReason:'advance_failed',updatedAt:Date.now()}).catch(function(){});
-  }
-}
-
-async function tryAdvanceFromWaiting(cycleId,finishedStep){
-  if(!db||activeCycleId!==cycleId)return;
-
-  var snap=await db.ref('infectionSession').once('value');
-  var session=snap.val();
-  if(!session||session.cycleId!==cycleId||session.status!=='waiting_next'||Number(session.step)!==Number(finishedStep))return;
-
-  if(Number(session.step)>=Number(session.maxSteps||10)){
-    await db.ref('infectionSession').update({status:'ended',endedReason:'max_steps',updatedAt:Date.now()});
-    return;
-  }
-
-  var nextStep=Number(session.step)+1;
-  var prepSnap=await db.ref('infectionPrepared/'+cycleId+'/step_'+nextStep).once('value');
-  var prep=prepSnap.val();
-  if(!prep||!prep.ready)return;
-
-  var latestSnap=await db.ref('infectionSession').once('value');
-  var latest=latestSnap.val();
-  if(!latest||latest.cycleId!==cycleId||latest.status!=='waiting_next'||Number(latest.step)!==Number(finishedStep))return;
-
-  try{
-    await db.ref('infectionSession').set({
-      cycleId:cycleId,
-      status:'speaking',
-      step:nextStep,
-      maxSteps:session.maxSteps||10,
-      currentSpeaker:prep.speaker,
-      currentTarget:normalizeTarget(prep.nextTarget),
-      sourceSpeaker:prep.sourceSpeaker,
-      startedBy:session.startedBy,
-      incomingMessage:prep.incomingMessage,
-      userOriginalMessage:prep.userOriginalMessage||session.userOriginalMessage||session.incomingMessage||'',
-      spokenText:prep.spokenText,
-      speakingStartedAt:Date.now(),
-      updatedAt:Date.now(),
-      createdAt:session.createdAt||Date.now()
-    });
-  }catch(e){
-    console.error('[tryAdvanceFromWaiting] 推進失敗:',e.message);
-    await db.ref('infectionSession').update({status:'ended',endedReason:'advance_failed',updatedAt:Date.now()}).catch(function(){});
-  }
-}
-
-function parseSpokenText(raw){
-  var original=String(raw||'').trim();
-  var txt=original;
-
-  function cleanMeta(s){
-    return String(s||'')
-      .replace(/^\uFEFF/,'')
-      .replace(/^```json\s*/i,'')
-      .replace(/^```javascript\s*/i,'')
-      .replace(/^```js\s*/i,'')
-      .replace(/^```\s*/,'')
-      .replace(/```$/,'')
-      .replace(/^Here is the JSON:?\s*/i,'')
-      .replace(/^Here is JSON:?\s*/i,'')
-      .replace(/^Sure,? here(?:'|')s the JSON:?\s*/i,'')
-      .replace(/^以下是(?:純)?\s*JSON(?:格式)?[:：]?\s*/i,'')
-      .replace(/^如下[:：]?\s*/i,'')
-      .trim();
-  }
-
-  function unwrapQuotedJson(s){
-    s=String(s||'').trim();
-    if((s.startsWith('"')&&s.endsWith('"'))||(s.startsWith("'")&&s.endsWith("'"))){
-      try{return JSON.parse(s);}catch(e){return s.slice(1,-1);}
-    }
-    return s;
-  }
-
-  function extractSpoken(value){
-    if(!value)return '';
-    if(typeof value==='object'){
-      return value.spokenText||value.visibleText||value.text||value.reply||value.content||value.message||'';
-    }
-    if(typeof value==='string'){
-      var s=cleanMeta(unwrapQuotedJson(value));
-      if((s.startsWith('{')&&s.endsWith('}'))||(s.startsWith('[')&&s.endsWith(']'))){
-        try{return extractSpoken(JSON.parse(s));}catch(e){}
-      }
-      return s;
-    }
-    return '';
-  }
-
-  txt=cleanMeta(txt);
-
-  try{
-    var direct=JSON.parse(txt);
-    var spoken=extractSpoken(direct);
-    if(spoken)return {spokenText:clampText(cleanMeta(spoken),120)};
-  }catch(e){}
-
-  var first=txt.indexOf('{'),last=txt.lastIndexOf('}');
-  if(first>=0&&last>first){
-    var jsonSlice=txt.slice(first,last+1);
-    try{
-      var obj=JSON.parse(jsonSlice);
-      var spoken2=extractSpoken(obj);
-      if(spoken2)return {spokenText:clampText(cleanMeta(spoken2),120)};
-    }catch(e){
-      try{
-        var repaired=jsonSlice
-          .replace(/[""]/g,'"')
-          .replace(/['']/g,"'")
-          .replace(/,\s*}/g,'}')
-          .replace(/,\s*]/g,']');
-        var obj2=JSON.parse(repaired);
-        var spoken3=extractSpoken(obj2);
-        if(spoken3)return {spokenText:clampText(cleanMeta(spoken3),120)};
-      }catch(e2){}
-    }
-  }
-
-  txt=cleanMeta(txt).replace(/```/g,'').trim();
-  txt=txt.replace(/⟳\s*感染紀錄[:：].*$/gmi,'').trim();
-
-  var lines=txt.split('\n').map(function(l){return l.trim();}).filter(function(l){
-    if(!l)return false;
-    if(/^Here is/i.test(l))return false;
-    if(/^JSON[:：]?$/i.test(l))return false;
-    if(/^```/.test(l))return false;
-    if(/^\{/.test(l)||/^\}/.test(l))return false;
-    if(/^"?spokenText"?\s*[:：]/i.test(l))return false;
-    return true;
-  });
-
-  var fallback=lines[0]||'這句話聽起來有點不對勁。';
-  fallback=fallback.replace(/^[-*•]\s*/,'').trim();
-  return {spokenText:clampText(fallback,120)};
-}
-
-async function generateRoleResponse(roleIdx,incomingMessage,sourceRoleIdx,cycleId,step,userOriginalMessage){
-  var role=charsData['node'+roleIdx];
-  if(!role)throw new Error('缺少角色資料');
-  if(!WORKER_BASE||WORKER_BASE.indexOf('REPLACE-ME')>=0)throw new Error('Proxy 尚未設定');
-
-  incomingMessage=String(incomingMessage||'').trim();
-  userOriginalMessage=String(userOriginalMessage||incomingMessage||'').trim();
-
-  var sourceName=(sourceRoleIdx==='user')?'使用者':((charsData['node'+sourceRoleIdx]&&charsData['node'+sourceRoleIdx].name)||('節點 '+(Number(sourceRoleIdx)+1)));
-  var dd=['輕微解讀','適度重新詮釋','明顯扭曲','大幅改寫','極端變異'][(role.distort||3)-1]||'明顯扭曲';
-  var isFromUser=(sourceRoleIdx==='user');
-
-  var instructions=
-    '你是互動裝置《感染回聲》中的角色「'+role.name+'」。\n'+
-    '你的核心人格：'+(role.persona||'')+'\n'+
-    '你的性格標籤：'+((role.traits||[]).join('、')||'無')+'\n'+
-    '你的扭曲強度：'+(role.distort||3)+'/5（'+dd+'）。\n'+
-    '訊息來源：'+sourceName+'。\n\n'+
-    '任務：你必須根據「目前收到的訊息」做出角色化回應。\n'+
-    '你的回應必須明顯連接到訊息內容，不可以離題，不可以泛泛而談。\n'+
-    '如果目前訊息來自使用者，就直接回應使用者；如果來自上一個角色，就延續上一句，但仍保留使用者原始輸入作為背景。\n'+
-    '不要說你是 AI，不要說 JSON，不要說 Here is JSON，不要輸出 markdown，不要解釋格式。\n'+
-    '只用繁體中文。只寫 1 句角色台詞，不超過 45 個中文字。\n'+
-    '最後必須輸出符合 schema 的 JSON，且只能有 spokenText 欄位。';
-
-  var userPrompt=
-    '使用者原始輸入：'+userOriginalMessage+'\n'+
-    '目前這一步收到的訊息：'+incomingMessage+'\n'+
-    '目前訊息是否直接來自使用者：'+(isFromUser?'是':'否')+'\n\n'+
-    '請輸出 spokenText。';
-
-  var body=JSON.stringify({
-    model:OPENAI_MODEL,
-    input:[
-      {
-        role:'developer',
-        content:[{type:'input_text',text:instructions}]
-      },
-      {
-        role:'user',
-        content:[{type:'input_text',text:userPrompt}]
-      }
-    ],
-    text:{
-      format:{
-        type:'json_schema',
-        name:'infection_echo_spoken_text',
-        strict:true,
-        schema:{
-          type:'object',
-          additionalProperties:false,
-          properties:{
-            spokenText:{type:'string'}
-          },
-          required:['spokenText']
-        }
-      }
-    },
-    temperature:0.75,
-    max_output_tokens:120
-  });
-
-  console.log('[OpenAI prompt]',{role:role.name,step:step,source:sourceName,userOriginalMessage:userOriginalMessage,incomingMessage:incomingMessage});
-
-  function extractOpenAIText(data){
-    if(!data)return '';
-    if(typeof data.output_text==='string'&&data.output_text.trim())return data.output_text.trim();
-    var out=data.output||[];
-    for(var i=0;i<out.length;i++){
-      var item=out[i];
-      var content=item&&item.content?item.content:[];
-      for(var j=0;j<content.length;j++){
-        var c=content[j];
-        if(c&&typeof c.text==='string'&&c.text.trim())return c.text.trim();
-      }
-    }
-    return '';
-  }
-
-  var maxRetries=3;
-  for(var attempt=1;attempt<=maxRetries;attempt++){
-    var idToken=await getAuthToken();
-    var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+idToken
-      },
-      body:body
-    });
-
-    var rawText='';
-    var data=null;
-    try{
-      rawText=await resp.text();
-      data=rawText?JSON.parse(rawText):null;
-    }catch(e){
-      data=null;
-    }
-
-    if(resp.status===429||resp.status===500||resp.status===502||resp.status===503||resp.status===504){
-      if(attempt<maxRetries){
-        var wait=(attempt===1?2500:attempt===2?5000:9000);
-        console.log('[OpenAI] '+resp.status+' attempt '+attempt+', retrying in '+wait+'ms');
-        await new Promise(function(r){setTimeout(r,wait);});
-        continue;
-      }
-      throw new Error('OpenAI 暫時忙碌或額度受限，請稍後再試');
-    }
-
-    if(!resp.ok){
-      var errMsg=(data&&data.error&&(data.error.message||JSON.stringify(data.error)))||rawText||('HTTP '+resp.status);
-      throw new Error(errMsg);
-    }
-
-    var raw=extractOpenAIText(data);
-    console.log('[OpenAI raw]',raw);
-
-    var parsed=parseSpokenText(raw);
-    if(!parsed.spokenText){
-      parsed.spokenText=isFromUser?'你剛剛那句話讓我很在意。':'這句話聽起來越來越不單純。';
-    }
-    parsed.spokenText=clampText(parsed.spokenText,120);
-    console.log('[OpenAI parsed]',parsed.spokenText);
-    return parsed;
-  }
-}
-
-function speakSessionText(session){
-  var key=session.cycleId+'_step_'+session.step+'_speaker_'+session.currentSpeaker;
-  if(lastSpokenKey===key)return;
-  lastSpokenKey=key;
-
-  vbtn.classList.add('speaking');
-  vbtn.textContent='🔊';
-  document.getElementById('swave').classList.add('on');
-  document.getElementById('vhint').textContent='AI 說話中...';
-  document.getElementById('vtrans').textContent='AI 說話中...';
-  document.getElementById('vtrans').classList.add('active');
-  setModelState('speaking');
-  set3DState('speaking');
-
-  var role=charsData['node'+session.currentSpeaker]||activeChar;
-  var v=(role&&role.voice)||{};
-
-  elevenSpeak(session.spokenText||'',v.name||'ShanShan',v.rate||1.0,v.stability||0.4,v.similarity||0.75,function(){
-    // 音頻播完時再次確認：cycleId 沒被打斷、且 lastSpokenKey 還是這個 step
-    // 防止音頻播完前循環已被重置，還繼續推進步驟
-    if(activeCycleId!==session.cycleId)return;
-    if(lastSpokenKey!==key)return;
-    setVIdle();
-    document.getElementById('swave').classList.remove('on');
-    setModelState('idle');
-    set3DState('idle');
-    advanceAfterSpeaking(session);
-  });
-}
-
 function clearCurrentAudioOnly(){
   if(currentAudioWatchdog){
     clearTimeout(currentAudioWatchdog);
@@ -2198,17 +1202,6 @@ function clearCurrentAudioOnly(){
     currentAudioUrl=null;
   }
 }
-
-function stopSpeaking(){
-  currentSpeakToken++;
-  clearCurrentAudioOnly();
-  try{speechSynthesis.cancel();}catch(e){}
-  document.getElementById('swave').classList.remove('on');
-  setVIdle();
-  setModelState('idle');
-  set3DState('idle');
-}
-
 function previewVoice(i){
   var name=document.getElementById('c-name-'+i).value||'角色';
   var vname=document.getElementById('c-voice-'+i).value;
@@ -2333,7 +1326,6 @@ async function elevenSpeak(text,voiceName,rate,stability,similarity,onDone){
     runFallback();
   }
 }
-
 function fallbackSpeak(text,onDone,speakToken){
   try{speechSynthesis.cancel();}catch(e){}
   var done=false;
@@ -2351,7 +1343,6 @@ function fallbackSpeak(text,onDone,speakToken){
   u.onerror=finish;
   speechSynthesis.speak(u);
 }
-
 async function testElevenLabs(){
   if(!workerReady()){showNotif('Proxy 尚未設定（WORKER_BASE）');return;}showNotif('測試中...');
   try{
@@ -2381,10 +1372,964 @@ async function fetchVoiceList(){
     }else{document.getElementById('voice-list-content').textContent=JSON.stringify(data);}
   }catch(e){document.getElementById('voice-list-content').textContent='錯誤：'+e.message;}
 }
+function initFaceDetection(){
+  if(faceDetectionRunning)return;
+  var videoEl=document.getElementById('face-video');
+  if(!videoEl)return;
+  if(typeof FaceDetection==='undefined'){setTimeout(initFaceDetection,600);return;}
 
-buildTraits();speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
+  faceDetector=new FaceDetection({locateFile:function(f){
+    return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/'+f;
+  }});
+  faceDetector.setOptions({model:'short',minDetectionConfidence:0.55});
+  faceDetector.onResults(onFaceResults);
+
+  navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'},audio:false})
+  .then(function(stream){
+    videoEl.srcObject=stream;
+    return videoEl.play();
+  }).then(function(){
+    faceDetectionRunning=true;
+    console.log('[FaceDetection] started, video size:',videoEl.videoWidth,'x',videoEl.videoHeight);
+    
+
+    var sending=false;
+    function tick(){
+      if(!faceDetectionRunning)return;
+      requestAnimationFrame(function(){
+        if(faceDetector&&!sending&&videoEl.readyState>=2&&videoEl.videoWidth>0){
+          sending=true;
+          faceDetector.send({image:videoEl}).then(function(){
+            sending=false;
+          }).catch(function(e){
+            sending=false;
+            console.warn('[FaceDetection] send error:',e);
+          });
+        }
+        tick();
+      });
+    }
+    function waitForVideo(){
+      if(videoEl.videoWidth>0&&videoEl.readyState>=2){
+        console.log('[FaceDetection] video ready, starting tick');
+        tick();
+      }else{
+        console.log('[FaceDetection] waiting for video...',videoEl.readyState,videoEl.videoWidth);
+        setTimeout(waitForVideo,200);
+      }
+    }
+    waitForVideo();
+  }).catch(function(e){
+    console.warn('[FaceDetection] failed:',e.message);
+    document.getElementById('vtrans').textContent='鏡頭無法啟動：請重新整理或檢查權限';
+  });
+}
+
+// ── Firebase 連線 ───────────────────────────────────────
+function startFb(){
+  firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
+  db=firebase.database();
+  ensureAuthReady().catch(function(){});
+  db.ref('.info/serverTimeOffset').on('value',function(s){serverOffset=s.val()||0;});
+  var started=false;
+  db.ref('.info/connected').on('value',function(snap){
+    if(!snap.val())return;
+    var el=document.getElementById('fb-status');el.textContent='✓ Firebase 已連線';el.className='fb-status ok';
+    document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
+    if(started)return;
+    started=true;
+    db.ref('chars').on('value',function(s){
+      charsData=s.val()||{};
+      renderRoleList();
+      fillSetupPanels();
+      preloadPublishedVoices({node0:getRole(0),node1:getRole(1)});
+    });
+    listenToPresence();
+    listenToSession();
+    showScreen('screen-select');
+  });
+}
+function listenToPresence(){
+  if(presenceListenerStarted||!db)return;
+  presenceListenerStarted=true;
+  db.ref('presence').on('value',function(snap){
+    var raw=snap.val()||{};var parsed={};
+    for(var i=0;i<2;i++){var node=raw['node'+i]||{};parsed[i]=Object.keys(node).length>0;}
+    onlineRoles=parsed;
+  });
+}
+function listenToSession(){
+  if(sessionListenerStarted||!db)return;
+  sessionListenerStarted=true;
+  db.ref(SESSION_PATH).on('value',function(snap){onSessionUpdate(snap.val());});
+}
+
+// ── 角色設定頁 ─────────────────────────────────────────
+function buildSetupPanels(){
+  var wrap=document.getElementById('cpanels');if(!wrap)return;
+  var html='';
+  for(var i=0;i<2;i++){
+    var opts=VOICE_OPTIONS.map(function(v){return '<option value="'+esc(v[0])+'">'+esc(v[1])+'</option>';}).join('');
+    html+='<div class="cpanel card'+(i===0?' on':'')+'" id="cpanel-'+i+'">'+
+      '<div class="frow"><div class="f"><label>角色名稱</label><input type="text" id="c-name-'+i+'"/></div>'+
+      '<div class="f"><label>Emoji</label><input type="text" id="c-emoji-'+i+'" style="text-align:center;"/></div></div>'+
+      '<div class="frow s"><div class="f"><label>職稱</label><input type="text" id="c-title-'+i+'"/></div></div>'+
+      '<div class="frow s"><div class="f"><label>人格設定（AI 會照這段說話與出價）</label><textarea id="c-persona-'+i+'" rows="12"></textarea></div></div>'+
+      '<div class="sec-title" style="margin-top:14px;">🔊 語音</div>'+
+      '<div class="frow s"><div class="f"><label>聲音角色</label><select id="c-voice-'+i+'">'+opts+'</select></div></div>'+
+      '<div class="frow s"><div class="f"><label>語速</label><div class="srow"><span class="sl">慢</span><input type="range" min="0.7" max="1.2" step="0.05" id="c-rate-'+i+'" oninput="document.getElementById(\'rv-'+i+'\').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">快</span><span class="sv" id="rv-'+i+'"></span></div></div></div>'+
+      '<div class="frow s"><div class="f"><label>穩定性（低＝情緒起伏大）</label><div class="srow"><span class="sl">多變</span><input type="range" min="0" max="1" step="0.05" id="c-stab-'+i+'" oninput="document.getElementById(\'sv-'+i+'\').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">穩定</span><span class="sv" id="sv-'+i+'"></span></div></div></div>'+
+      '<div class="frow s"><div class="f"><label>相似度</label><div class="srow"><span class="sl">低</span><input type="range" min="0" max="1" step="0.05" id="c-sim-'+i+'" oninput="document.getElementById(\'smv-'+i+'\').textContent=parseFloat(this.value).toFixed(2)"/><span class="sl">高</span><span class="sv" id="smv-'+i+'"></span></div></div></div>'+
+      '<button class="prev-btn" onclick="previewVoice('+i+')">▶ 試聽語音</button> '+
+      '<button class="prev-btn" onclick="resetSetupPanel('+i+')">↺ 還原預設人設</button>'+
+      '<button class="btn-p" id="save-'+i+'" onclick="saveChar('+i+')" disabled>▶ 發布節點 '+(i+1)+'</button>'+
+      '</div>';
+  }
+  wrap.innerHTML=html;
+  fillSetupPanels();
+}
+var setupFilled=[false,false];
+function fillSetupPanel(i,r){
+  function set(id,v){var el=document.getElementById(id);if(el)el.value=v;}
+  function txt(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
+  var v=r.voice||{};
+  set('c-name-'+i,r.name||'');set('c-emoji-'+i,r.emoji||'');set('c-title-'+i,r.title||'');set('c-persona-'+i,r.persona||'');
+  set('c-voice-'+i,v.name||'');
+  set('c-rate-'+i,v.rate||1);txt('rv-'+i,Number(v.rate||1).toFixed(2));
+  set('c-stab-'+i,v.stability!=null?v.stability:0.5);txt('sv-'+i,Number(v.stability!=null?v.stability:0.5).toFixed(2));
+  set('c-sim-'+i,v.similarity||0.75);txt('smv-'+i,Number(v.similarity||0.75).toFixed(2));
+}
+function fillSetupPanels(){
+  for(var i=0;i<2;i++){
+    var c=charsData['node'+i];
+    var published=!!(c&&c.schema===ROLE_SCHEMA);
+    var nd=document.getElementById('ns-'+i);if(nd)nd.className='nd'+(published?' ok':'');
+    var nss=document.getElementById('nss-'+i);if(nss)nss.textContent=published?'已發布 ✓':'未發布（使用內建預設人設）';
+    var nsn=document.getElementById('nsn-'+i);if(nsn)nsn.textContent=getRole(i).emoji+' '+getRole(i).name;
+    // 只在第一次填，避免使用者正在編輯時被 Firebase 更新蓋掉
+    if(!setupFilled[i]&&document.getElementById('c-name-'+i)){fillSetupPanel(i,getRole(i));setupFilled[i]=true;}
+  }
+}
+function resetSetupPanel(i){fillSetupPanel(i,DEFAULT_ROLES[i]);showNotif('已還原為預設人設（尚未發布）');}
+function saveChar(i){
+  if(!db){alert('請先連線');return;}
+  var data={
+    schema:ROLE_SCHEMA,
+    name:document.getElementById('c-name-'+i).value||DEFAULT_ROLES[i].name,
+    emoji:document.getElementById('c-emoji-'+i).value||DEFAULT_ROLES[i].emoji,
+    title:document.getElementById('c-title-'+i).value||DEFAULT_ROLES[i].title,
+    persona:document.getElementById('c-persona-'+i).value||DEFAULT_ROLES[i].persona,
+    voice:{name:document.getElementById('c-voice-'+i).value,rate:parseFloat(document.getElementById('c-rate-'+i).value),stability:parseFloat(document.getElementById('c-stab-'+i).value),similarity:parseFloat(document.getElementById('c-sim-'+i).value)},
+    updatedAt:Date.now()
+  };
+  db.ref('chars/node'+i).set(data).then(function(){
+    var b=document.getElementById('save-'+i);b.textContent='✓ 已發布';
+    setTimeout(function(){b.textContent='▶ 發布節點 '+(i+1);},1200);
+  }).catch(function(e){showNotif('儲存失敗:'+e.message);});
+}
+
+function renderRoleList(){
+  var list=document.getElementById('role-list');if(!list)return;list.innerHTML='';
+  for(var i=0;i<2;i++){(function(idx){
+    var c=getRole(idx);var card=document.createElement('div');
+    card.className='rc';
+    card.innerHTML='<div class="rav '+RC[idx]+'">'+esc(c.emoji)+'</div><div class="rt"><div class="rn">'+(idx===0?'A ｜ ':'B ｜ ')+esc(c.name)+'</div><div class="rtr">'+esc(c.title||'')+'</div></div><div class="ra">→</div>';
+    card.onclick=function(){enterRole(idx);};
+    list.appendChild(card);
+  })(i);}
+  var hc=document.getElementById('host-check');
+  if(hc){var p=getHostPref();hc.checked=(p==='1');}
+}
+
+function goBack(){
+  stopSpeaking();destroy3DLayer();
+  if(isHost()&&H)hostReset('back');
+  stopRecognition();
+  if(presenceRef){presenceRef.remove();presenceRef=null;}
+  activeChar=null;activeNodeIdx=null;localRoleIdx=null;
+  document.getElementById('key-legend').classList.remove('on');
+  renderRoleList();showScreen('screen-select');
+}
+
+function enterRole(idx){
+  activeNodeIdx=idx;localRoleIdx=idx;activeChar=getRole(idx);
+  // 沒勾選過主控時，依照勾選框的狀態決定
+  var hc=document.getElementById('host-check');
+  if(hc&&getHostPref()===''&&hc.checked)setHostPref(true);
+  spokenTurnId=null;playingTurnId=null;
+  setChatBackground(idx);setBubbleText('','empty');
+  showScreen('screen-chat');init3DForRole(idx);set3DState('idle');preloadCharacterVoice(activeChar);
+  document.getElementById('key-legend').classList.toggle('on',isHost());
+  if(isHost()){
+    setTimeout(initFaceDetection,300);
+    if(!H)publishIdle('');
+  }
+  if(db){
+    if(presenceRef)presenceRef.remove();
+    var sid=localDeviceId+'_'+Math.random().toString(36).slice(2,6);
+    presenceRef=db.ref('presence/node'+idx+'/'+sid);
+    presenceRef.set({deviceId:localDeviceId,joinedAt:Date.now(),host:isHost()});presenceRef.onDisconnect().remove();
+  }
+  renderSession(lastSession);
+}
+
+// ════════════════════════════════════════════════════════
+//  主控流程（只在主控電腦上跑）
+//  phase: idle → ready（已放卡）→ intro（15 秒自介）→ round1（第一輪，不插話）
+//         → open（插話／AI 互談／爆料／敲槌）→ deal（成交收尾）→ ended
+//  主控負責：計時、決定誰說話、呼叫 AI 生成兩位面試官的台詞、記錄出價。
+//  每台電腦只負責把「輪到自己角色」的台詞念出來，念完回報 turnDone。
+// ════════════════════════════════════════════════════════
+var H=null;
+var OPEN_HINT='你可以隨時補充說明或開出期待月薪 ・ 按 A / B 與該企業成交';
+
+function hostAlive(runId,allowDeal){
+  if(!H||H.id!==runId)return false;
+  if(H.phase==='intro'||H.phase==='round1'||H.phase==='open')return true;
+  return !!(allowDeal&&H.phase==='deal');
+}
+function hostTimeUp(){return H&&H.deadline&&nowSrv()>=H.deadline;}
+
+function hostData(){
+  var c=H.card;
+  var data={
+    v:'pt1',id:H.id,phase:H.phase,hostDevice:localDeviceId,
+    card:c?{key:c.key,title:c.title,min:c.min,max:c.max}:null,
+    deadline:H.deadline||0,introEndsAt:H.introEndsAt||0,
+    offers:{n0:H.offers[0]||null,n1:H.offers[1]||null},
+    lastBidder:(H.lastBidder==null?-1:H.lastBidder),
+    status:H.status,thinker:(H.thinker==null?-1:H.thinker),
+    turn:H.turn||null,hint:H.hint||'',userText:H.userText||'',note:H.note||'',
+    deal:H.deal||null,endReason:H.endReason||'',updatedAt:nowSrv()
+  };
+  return data;
+}
+function hostPublish(){
+  if(!db||!H)return Promise.resolve();
+  return db.ref(SESSION_PATH).update(hostData()).catch(function(e){console.warn('[host] publish failed',e.message);});
+}
+function publishIdle(reason){
+  H=null;
+  if(!db)return;
+  db.ref(SESSION_PATH).set({v:'pt1',id:randId('idle'),phase:'idle',status:'idle',hostDevice:localDeviceId,endReason:reason||'',updatedAt:nowSrv()})
+    .catch(function(e){console.warn('[host] publishIdle failed',e.message);});
+}
+function hostReset(reason){
+  stopRecognition();
+  publishIdle(reason||'reset');
+}
+
+function hostPlaceCard(card){
+  if(!card)return;
+  if(H&&H.card&&H.card.key===card.key&&H.phase!=='ended')return; // 同一張卡重複感應
+  stopRecognition();
+  H={
+    id:randId('s'),phase:'ready',card:card,startedAt:0,deadline:0,introEndsAt:0,
+    offers:{},bidCount:[0,0],lastBidder:null,lastSpeaker:null,exposeDone:false,
+    transcript:[],recentAi:[],turn:null,status:'idle',thinker:-1,
+    hint:'請面對鏡頭，面試即將開始',userText:'',note:'',deal:null,endReason:'',
+    pendingWarn:null,prefetch:null,introEndEarly:false
+  };
+  // 新的一場：整份覆寫，清掉上一場的 turnDone 等欄位
+  db.ref(SESSION_PATH).set(hostData()).catch(function(e){console.warn('[host] place card failed',e.message);});
+  faceHeldSince=null;
+}
+function hostRemoveCard(){
+  if(!H)return;
+  hostReset('card_removed');
+}
+
+function startIntro(){
+  if(!H||H.phase!=='ready')return;
+  var t=nowSrv();
+  H.phase='intro';H.startedAt=t;H.deadline=t+TOTAL_MS;H.introEndsAt=t+INTRO_MS;
+  H.status='listening';H.thinker=-1;
+  H.hint='請說明你為什麼想應徵「'+H.card.title+'」';
+  SR.introText='';SR.pending='';SR.interim='';
+  startRecognition();
+  hostPublish();
+  runIntro(H.id);
+}
+
+async function runIntro(runId){
+  while(hostAlive(runId)&&H.phase==='intro'&&nowSrv()<H.introEndsAt&&!H.introEndEarly)await sleep(150);
+  if(!hostAlive(runId))return;
+  // 15 秒到了但體驗者還在講，最多再等 3 秒讓他講完這句
+  var extra=Date.now()+3000;
+  while(hostAlive(runId)&&!H.introEndEarly&&Date.now()<extra&&SR.interim&&Date.now()-SR.lastActivity<USER_SILENCE_MS)await sleep(150);
+  if(!hostAlive(runId))return;
+  var text=(SR.introText+(SR.interim?'，'+SR.interim:'')).trim();
+  SR.introText='';SR.interim='';SR.pending='';
+  H.transcript.push({who:'user',text:text||'（體驗者在自我介紹時間內沒有說話）',kind:'intro'});
+  H.userText=text;
+  hostRound1(runId);
+}
+
+async function hostRound1(runId){
+  H.phase='round1';
+  H.hint='第一輪：兩位面試官正在評估你，請先聆聽';
+  await hostPublish();
+  await respondBoth(runId,{kind:'round1'});
+  if(!hostAlive(runId))return;
+  H.phase='open';H.hint=OPEN_HINT;
+  SR.pending=''; // 第一輪不插話：這段期間說的話不算
+  await hostPublish();
+  hostLoop(runId);
+}
+
+async function hostLoop(runId){
+  while(hostAlive(runId)){
+    if(hostTimeUp()){await hostEnd(runId,'timeout');return;}
+    var userText=await waitForUser(runId);
+    if(!hostAlive(runId))return;
+    if(hostTimeUp()){await hostEnd(runId,'timeout');return;}
+
+    // 還沒出價就敲槌：由該 AI 回一句警語
+    if(H.pendingWarn!=null){
+      var w=H.pendingWarn;H.pendingWarn=null;H.prefetch=null;
+      H.status='thinking';H.thinker=w;hostPublish();
+      var rw=await genSafe(w,{kind:'warn'});
+      await speakTurn(runId,w,rw,'warn',{prefetch:true});
+      continue;
+    }
+
+    // 體驗者插話（補充／反向出價／表態相信哪一方）→ 兩位 AI 都回應
+    if(userText){
+      H.prefetch=null;
+      H.transcript.push({who:'user',text:userText,kind:'user'});
+      H.userText=userText;
+      await respondBoth(runId,{kind:'user',userText:userText});
+      continue;
+    }
+
+    // 兩位都出價達門檻 → 互相爆料（一場一次）
+    if(!H.exposeDone&&H.bidCount[0]>=EXPOSE_AFTER_BIDS&&H.bidCount[1]>=EXPOSE_AFTER_BIDS){
+      H.exposeDone=true;H.prefetch=null;
+      var att=Math.random()<0.5?0:1;
+      H.status='thinking';H.thinker=att;hostPublish();
+      var r1=await genSafe(att,{kind:'expose'});
+      var p2=null;
+      var ok=await speakTurn(runId,att,r1,'expose',{nextThinker:1-att,onStart:function(){p2=genSafe(1-att,{kind:'expose_reply'});}});
+      if(!ok||!hostAlive(runId))return;
+      var r2=await p2;
+      await speakTurn(runId,1-att,r2,'expose_reply',{prefetch:true});
+      continue;
+    }
+
+    // 沒人說話 → 兩位 AI 互相對談，輪流發言
+    var next=(H.lastSpeaker==null)?0:1-H.lastSpeaker;
+    var r;
+    if(H.prefetch&&H.prefetch.afterTurn===(H.turn&&H.turn.id)&&H.prefetch.speaker===next){
+      H.status='thinking';H.thinker=next;hostPublish();
+      r=await H.prefetch.promise;
+    }else{
+      H.status='thinking';H.thinker=next;hostPublish();
+      r=await genSafe(next,{kind:'ai_talk'});
+    }
+    H.prefetch=null;
+    await speakTurn(runId,next,r,'ai_talk',{prefetch:true});
+  }
+}
+
+// 等體驗者插話：每位 AI 講完後留一段時間；體驗者一開口就等他講完。
+// AI 說話期間收到的話（已過濾回音）也會在這裡被接手。
+async function waitForUser(runId){
+  H.status='listening';H.thinker=-1;H.hint=OPEN_HINT;
+  hostPublish();
+  var start=Date.now();
+  while(hostAlive(runId)){
+    if(H.pendingWarn!=null)return '';
+    var now=Date.now();
+    var talking=!!SR.interim&&(now-SR.lastActivity<USER_SILENCE_MS);
+    if(SR.pending&&!talking&&now-SR.lastActivity>=USER_SILENCE_MS){var t=SR.pending;SR.pending='';return t;}
+    if(SR.pending&&now-start>USER_MAX_TALK_MS){var t2=SR.pending+(SR.interim?'，'+SR.interim:'');SR.pending='';SR.interim='';return t2;}
+    if(!SR.pending&&!talking&&now-start>=LISTEN_WINDOW_MS)return '';
+    if(hostTimeUp()&&!talking)return SR.pending?(function(){var t3=SR.pending;SR.pending='';return t3;})():'';
+    await sleep(120);
+  }
+  return '';
+}
+
+// 兩位 AI 都要回應時（第一輪、體驗者插話後）：
+// 同時讓兩位決定要不要出價 → 要出價的先講（都出價或都不出就隨機）
+// → 第一位講話的同時，依第一位的內容重新生成第二位的台詞（保留他原本的出價決定）。
+async function respondBoth(runId,ctx){
+  H.status='thinking';H.thinker=2;hostPublish();
+  var res=await Promise.all([genSafe(0,ctx),genSafe(1,ctx)]);
+  if(!hostAlive(runId))return;
+  var order;
+  if(res[0].bid&&!res[1].bid)order=[0,1];
+  else if(res[1].bid&&!res[0].bid)order=[1,0];
+  else order=Math.random()<0.5?[0,1]:[1,0];
+  var first=order[0],second=order[1];
+  var secondP=null;
+  var ok=await speakTurn(runId,first,res[first],ctx.kind,{nextThinker:second,onStart:function(){
+    secondP=genSafe(second,Object.assign({},ctx,{follow:true,plannedBid:res[second].bid}));
+  }});
+  if(!ok||!hostAlive(runId))return;
+  var r2=secondP?await secondP:res[second];
+  if(!r2||r2.failed)r2=res[second];
+  await speakTurn(runId,second,r2,ctx.kind,{prefetch:ctx.kind!=='round1'});
+}
+
+function clampSalary(n){
+  var c=H.card;n=Math.round(Number(n||0)/500)*500;
+  return Math.max(c.min,Math.min(salaryCap(c),n));
+}
+function hasSpokenAmount(text){return /[0-9０-９]|萬|千/.test(String(text||'').slice(0,30));}
+
+// 讓一位 AI 說一句話：記錄出價 → 發布到 Firebase → 等那台電腦念完
+async function speakTurn(runId,i,res,kind,opts){
+  opts=opts||{};
+  if(!hostAlive(runId,opts.allowDeal))return false;
+  var text=String(res&&res.spokenText||'').trim()||'……';
+  var offer=0,lower=false;
+  var canBid=(kind!=='warn'&&kind!=='deal_win'&&kind!=='deal_lose');
+  if(canBid&&res.bid&&res.salary>0){
+    var amt=clampSalary(res.salary);
+    var prev=H.offers[i];
+    if(!prev||prev.amount!==amt){
+      var other=H.offers[1-i];
+      lower=!!(other&&amt<other.amount);
+      H.offers[i]={amount:amt,count:(prev?prev.count:0)+1,at:nowSrv()};
+      H.bidCount[i]=(H.bidCount[i]||0)+1;
+      H.lastBidder=i;offer=amt;
+      if(!hasSpokenAmount(text))text='我出月薪'+fmtSpoken(amt)+'。'+text; // 規則：有出價一定先講價錢
+    }
+  }
+  var turn={id:randId('t'),speaker:i,text:text,offer:offer,lower:lower,kind:kind,reverse:(res&&res.reverse)||'none'};
+  H.turn=turn;H.lastSpeaker=i;H.status='speaking';
+  H.thinker=(opts.nextThinker==null?-1:opts.nextThinker);
+  H.transcript.push({who:i,text:text,offer:offer,kind:kind});
+  H.recentAi.push(text);if(H.recentAi.length>3)H.recentAi.shift();
+  H.note=turnNote(turn);
+  if(opts.onStart)opts.onStart();
+  if(opts.prefetch&&H.phase==='open'){
+    H.prefetch={afterTurn:turn.id,speaker:1-i,promise:genSafe(1-i,{kind:'ai_talk'})};
+  }
+  await hostPublish();
+  await waitTurnDone(runId,turn,opts.allowDeal);
+  return hostAlive(runId,opts.allowDeal);
+}
+function turnNote(t){
+  var name=getRole(t.speaker).name;
+  if(t.reverse==='accept')return name+' 接受了你的期待月薪';
+  if(t.reverse==='counter')return name+' 對你的期待月薪提出還價';
+  if(t.reverse==='reject')return name+' 拒絕了你的期待月薪';
+  if(t.kind==='expose')return name+' 爆料對手企業';
+  if(t.kind==='expose_reply')return name+' 反擊爆料';
+  if(t.kind==='warn')return name+' 尚未出價，敲槌無效';
+  if(t.offer&&t.lower)return name+' 出價低於對手，並說明原因';
+  if(t.offer)return name+' 出價';
+  return '';
+}
+async function waitTurnDone(runId,turn,allowDeal){
+  var limit=Date.now()+20000+turn.text.length*450;
+  while(Date.now()<limit){
+    if(!hostAlive(runId,allowDeal))return;
+    if(lastSession&&lastSession.turnDone===turn.id)return;
+    await sleep(120);
+  }
+  console.warn('[host] 等待念完逾時，直接進行下一步',turn.id);
+}
+
+function hostHammer(i){
+  if(!H){showNotif('請先放上職業卡');return;}
+  if(H.phase==='ready'||H.phase==='intro'||H.phase==='round1'){showNotif('第一輪結束後才能敲槌');return;}
+  if(H.phase!=='open')return;
+  if(!H.offers[i]){
+    showNotif(getRole(i).name+' 還沒出價，敲槌無效');
+    if(H.pendingWarn==null)H.pendingWarn=i;
+    H.note=getRole(i).name+' 尚未出價，敲槌無效';
+    hostPublish();
+    return;
+  }
+  hostDeal(i);
+}
+async function hostDeal(i){
+  var runId=H.id;
+  H.phase='deal';H.prefetch=null;H.pendingWarn=null;
+  H.deal={with:i,amount:H.offers[i].amount,name:getRole(i).name};
+  H.status='thinking';H.thinker=i;H.hint='成交！';H.note='';
+  SR.pending='';
+  await hostPublish(); // 狀態一改，所有電腦會立刻停止正在念的台詞
+  var rw=await genSafe(i,{kind:'deal_win'});
+  var pl=null;
+  var ok=await speakTurn(runId,i,rw,'deal_win',{allowDeal:true,nextThinker:1-i,onStart:function(){pl=genSafe(1-i,{kind:'deal_lose'});}});
+  if(ok&&pl){var rl=await pl;await speakTurn(runId,1-i,rl,'deal_lose',{allowDeal:true});}
+  if(H&&H.id===runId){
+    H.phase='ended';H.endReason='deal';H.status='ended';H.thinker=-1;
+    H.hint='面試結束 ・ 拿起職業卡（或按 0）即可重新開始';
+    await hostPublish();
+  }
+  stopRecognition();
+}
+async function hostEnd(runId,reason){
+  if(!H||H.id!==runId)return;
+  H.phase='ended';H.endReason=reason;H.status='ended';H.thinker=-1;H.prefetch=null;
+  H.hint='面試結束 ・ 拿起職業卡（或按 0）即可重新開始';
+  stopRecognition();
+  await hostPublish();
+}
+// 保險：時間到了但台詞拖太久，超過 15 秒就強制結束
+setInterval(function(){
+  if(!H||!H.deadline)return;
+  if((H.phase==='intro'||H.phase==='round1'||H.phase==='open')&&nowSrv()>H.deadline+15000)hostEnd(H.id,'timeout');
+},500);
+
+// ════════════════════════════════════════════════════════
+//  AI 台詞生成（主控電腦呼叫，經 Cloudflare Worker 轉給 OpenAI）
+// ════════════════════════════════════════════════════════
+var FALLBACK_LINES={
+  0:{default:'你的回答還不足以說服我。請給我一個具體的成果。',warn:'你還沒有聽到我的條件就想結束？你不想面試了嗎？',deal_win:'很好。希望你的表現能證明這個價格是合理的。',deal_lose:'這是你的選擇。我會把這個結果記錄進我的模型。'},
+  1:{default:'等等，這個想法很有意思，再多說一點！',warn:'欸，我都還沒開價耶，你這樣就要走了？你不想面試了嗎？',deal_win:'太好了！我已經開始期待你會提出什麼問題了！',deal_lose:'好吧，可惜了。不過你會後悔沒選一個更有趣的地方喔。'}
+};
+async function genSafe(i,ctx){
+  try{
+    return await generateLine(i,ctx);
+  }catch(e){
+    console.error('[AI] 生成失敗',i,ctx&&ctx.kind,e.message);
+    var fb=FALLBACK_LINES[i]||FALLBACK_LINES[0];
+    return {bid:false,salary:0,reverse:'none',spokenText:fb[ctx&&ctx.kind]||fb.default,failed:true};
+  }
+}
+
+function transcriptText(){
+  var lines=H.transcript.slice(-18).map(function(t){
+    if(t.who==='user')return '體驗者：'+t.text;
+    var n=getRole(t.who).name;
+    return n+'：'+t.text+(t.offer?'【出價 '+fmtSpoken(t.offer)+'】':'');
+  });
+  return lines.join('\n')||'（尚無對話）';
+}
+function offerText(i){
+  var o=H.offers[i];
+  return o?(fmtSpoken(o.amount)+'（已出價 '+o.count+' 次）'):'尚未出價';
+}
+
+function buildInstructions(i){
+  var me=getRole(i),op=getRole(1-i),c=H.card;
+  return [
+    '你正在互動裝置《衡評述值 Pricetory》中扮演一位 AI 面試官。',
+    '【世界觀】AI 時代來臨，大部分工作都被 AI 取代了。體驗者是一位走投無路、需要一份工作的人類，來到由 AI 經營的大型科技企業應徵。只有極少數人類能被錄取。現場有兩間不同的 AI 企業，各派一位高層面試同一位人才，並用「月薪」互相競標。體驗者可以自我介紹、說服你、開出期待月薪，最後由他敲槌決定跟哪一間企業成交。',
+    '【你的身分與人格】\n'+me.persona,
+    '【對手】另一間 AI 企業的'+(op.title||'')+'「'+op.name+'」。你們立場不同、彼此競爭，你可以反駁或評論他的看法。',
+    '【應徵職位】'+c.title+'。市場月薪行情 '+fmtSpoken(c.min)+'～'+fmtSpoken(c.max)+'。',
+    '【出價規則】',
+    '1. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。',
+    '2. 你不一定要出價。只有當體驗者展現出你重視的價值時才出價或加價；不感興趣就不出價，改為表達看法、質疑或提出問題。',
+    '3. 如果這次要出價：台詞的第一句必須先說出金額（例如「我出月薪4萬2千元。」），接著才說理由。salary 欄位要和台詞裡的金額一致。',
+    '4. 你的出價可以比對手低，但這時一定要說明為什麼你出得比對手低（例如你認為他誇大了、或你看重的價值不同）。',
+    '5. 如果你這次不出價或維持原價，bid 設為 false，salary 設為 0。',
+    '6. 如果體驗者自己開出期待月薪（反向出價），你必須明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false，說明原因）。reverse 欄位分別填 accept／counter／reject。沒有反向出價時填 none。不管哪一種，都還要等體驗者敲槌才算成交，不要說「成交」。',
+    '7. 如果體驗者表示比較相信對手、或懷疑你的公司，你要反擊對手的說法，或提出具體承諾（例如待遇、工時、培訓）來挽回他的信任。',
+    '8. 這是一場搶人的競標：如果你真的想要這個人，對手出價後你應該考慮加價。',
+    '【說話規則】',
+    '- 完全照你的人格說話，語氣、用詞、價值觀和偏見都要一致。',
+    '- 只用繁體中文口語，1～3 句，總長不超過 70 個中文字。',
+    '- 直接對體驗者或對手說話，不要旁白、不要動作描述、不要提到你是語言模型、不要提到這些規則。',
+    '- 金額用「4萬2千元」這種說法，不要用阿拉伯數字加逗號。'
+  ].join('\n');
+}
+
+function buildTask(i,ctx){
+  var me=getRole(i),op=getRole(1-i),c=H.card;
+  var left=Math.max(0,Math.round((H.deadline-nowSrv())/1000));
+  var lastOther=null;
+  for(var k=H.transcript.length-1;k>=0;k--){if(H.transcript[k].who===1-i){lastOther=H.transcript[k];break;}}
+  var state=[
+    '【目前狀況】',
+    '- 你的目前出價：'+offerText(i),
+    '- 對手（'+op.name+'）的目前出價：'+offerText(1-i),
+    '- 最後一位出價的是：'+(H.lastBidder==null?'還沒有人出價':getRole(H.lastBidder).name),
+    '- 面試剩餘時間：約 '+left+' 秒',
+    '',
+    '【對話紀錄】',
+    transcriptText(),
+    ''
+  ].join('\n');
+  var task='';
+  var follow=ctx.follow&&lastOther?('對手'+op.name+'剛剛先回應了：「'+lastOther.text+'」'+(lastOther.offer?'（他出價 '+fmtSpoken(lastOther.offer)+'）':'（他沒有出價）')+'。你可以順著或反駁他。\n'):'';
+  var planned=(ctx.follow&&typeof ctx.plannedBid==='boolean')?('你原本的判斷是這次'+(ctx.plannedBid?'要':'不要')+'出價，請維持這個決定（金額可以依對手的出價調整）。\n'):'';
+  switch(ctx.kind){
+    case 'round1':
+      task='體驗者剛剛用 15 秒做完自我介紹（見對話紀錄最後一行）。這是你在這場面試第一次發言。\n'+follow+planned+
+        '請決定要不要出價：要出價就先說金額再說原因；不出價就說出你的看法，或問體驗者一個符合你人格的問題。';
+      break;
+    case 'user':
+      task='體驗者剛剛說：「'+ctx.userText+'」\n'+follow+planned+
+        '請針對他這句話回應（可以追問、質疑或肯定），並決定這次要不要再次出價。'+
+        '如果他開出期待月薪，依出價規則第 6 點回應；如果他表示比較相信哪一方，依第 7 點回應。';
+      break;
+    case 'ai_talk':
+      task='體驗者暫時沒有說話。請接著對話繼續：回應對手剛剛說的話（反駁、補充或評論他的出價），或直接追問體驗者一個問題。'+
+        '你可以決定要不要加價；如果對手出得比你高而你仍然想要這個人，可以考慮加價。';
+      break;
+    case 'expose':
+      task='你們已經互相加價好幾次了。現在你要「爆料」：揭露對手'+op.name+'所屬企業的一個負面內幕（例如過度加班導致人才流失、裁員、績效壓榨、只會畫大餅等，依你的人格語氣即興編，聽起來要像真的發生過），質疑對方的誠意，讓體驗者動搖。可以順勢提出你的條件或出價。';
+      break;
+    case 'expose_reply':
+      task='對手'+op.name+'剛剛當著體驗者的面爆料你的公司：「'+(lastOther?lastOther.text:'')+'」\n'+
+        '請反擊：澄清、或揭對方的短，也可以提出新的承諾或待遇，把體驗者拉回來。';
+      break;
+    case 'warn':
+      task='體驗者剛剛想直接跟你的企業成交，但你根本還沒有開出任何條件。請用你的人格語氣回一句帶點警告意味的話（例如「你不想面試了嗎？」的意思），提醒他你還沒出價。這次 bid 必須是 false。';
+      break;
+    case 'deal_win':
+      task='體驗者敲槌了，選擇和你的企業成交，月薪 '+fmtSpoken(H.deal.amount)+'。請用一句符合你人格的話作結。這次 bid 必須是 false。';
+      break;
+    case 'deal_lose':
+      task='體驗者敲槌了，選擇了對手'+op.name+'的企業（月薪 '+fmtSpoken(H.deal.amount)+'）。請用一句符合你人格的話回應（可以帶點不甘心或評論）。這次 bid 必須是 false。';
+      break;
+    default:
+      task='請繼續面試。';
+  }
+  return state+'【這次的任務】\n'+task;
+}
+
+function extractOpenAIText(data){
+  if(!data)return '';
+  if(typeof data.output_text==='string'&&data.output_text.trim())return data.output_text.trim();
+  var out=data.output||[];
+  for(var i=0;i<out.length;i++){
+    var content=(out[i]&&out[i].content)||[];
+    for(var j=0;j<content.length;j++){var c=content[j];if(c&&typeof c.text==='string'&&c.text.trim())return c.text.trim();}
+  }
+  return '';
+}
+
+async function generateLine(i,ctx){
+  if(!workerReady())throw new Error('Proxy 尚未設定');
+  var body=JSON.stringify({
+    model:OPENAI_MODEL,
+    input:[
+      {role:'developer',content:[{type:'input_text',text:buildInstructions(i)}]},
+      {role:'user',content:[{type:'input_text',text:buildTask(i,ctx)}]}
+    ],
+    text:{format:{type:'json_schema',name:'pricetory_turn',strict:true,schema:{
+      type:'object',additionalProperties:false,
+      properties:{
+        bid:{type:'boolean'},
+        salary:{type:'integer'},
+        reverse:{type:'string',enum:['none','accept','counter','reject']},
+        spokenText:{type:'string'}
+      },
+      required:['bid','salary','reverse','spokenText']
+    }}},
+    temperature:0.85,
+    max_output_tokens:300
+  });
+  console.log('[AI] request',getRole(i).name,ctx.kind);
+  for(var attempt=1;attempt<=3;attempt++){
+    var idToken=await getAuthToken();
+    var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:body});
+    var rawText='',data=null;
+    try{rawText=await resp.text();data=rawText?JSON.parse(rawText):null;}catch(e){data=null;}
+    if([429,500,502,503,504].indexOf(resp.status)>=0&&attempt<3){await sleep(attempt===1?1500:4000);continue;}
+    if(!resp.ok){throw new Error((data&&data.error&&(data.error.message||JSON.stringify(data.error)))||rawText||('HTTP '+resp.status));}
+    var raw=extractOpenAIText(data);
+    var parsed=null;
+    try{parsed=JSON.parse(raw);}catch(e){
+      var m=raw.match(/\{[\s\S]*\}/);if(m){try{parsed=JSON.parse(m[0]);}catch(e2){}}
+    }
+    if(!parsed||!parsed.spokenText)throw new Error('AI 回傳格式錯誤：'+raw.slice(0,120));
+    parsed.spokenText=clampText(String(parsed.spokenText).replace(/^["「]|["」]$/g,''),140);
+    parsed.salary=parseInt(parsed.salary,10)||0;
+    if(['warn','deal_win','deal_lose'].indexOf(ctx.kind)>=0){parsed.bid=false;parsed.salary=0;}
+    console.log('[AI]',getRole(i).name,ctx.kind,parsed);
+    return parsed;
+  }
+  throw new Error('OpenAI 暫時忙碌，請稍後再試');
+}
+
+// ════════════════════════════════════════════════════════
+//  每台電腦：依 Firebase 上的面試狀態更新畫面、念出自己角色的台詞
+// ════════════════════════════════════════════════════════
+var lastFlashTurnId=null,flashTimer=null;
+
+function onSessionUpdate(s){
+  lastSession=s;
+  renderSession(s);
+  handleSpeaking(s);
+}
+
+function setCenter(title,sub,cls){
+  var el=document.getElementById('hud-center');if(!el)return;
+  if(!title){el.classList.add('hidden');return;}
+  el.className='hud-center'+(cls?' '+cls:'');
+  document.getElementById('hud-center-title').textContent=title;
+  document.getElementById('hud-center-sub').textContent=sub||'';
+}
+
+function renderSession(s){
+  if(!activeChar||localRoleIdx===null)return;
+  var me=localRoleIdx;
+  var phase=(s&&s.phase)||'idle';
+  for(var i=0;i<2;i++)document.getElementById('offer-who-'+i).textContent=roleLabel(i);
+
+  // 職缺
+  var c=s&&s.card;
+  document.getElementById('hud-job-title').textContent=c?c.title:'尚未放卡';
+  document.getElementById('hud-job-range').textContent=c?('行情 '+fmtWan(c.min)+'～'+fmtWan(c.max)):'';
+
+  // 出價
+  var offers=(s&&s.offers)||{};
+  for(var j=0;j<2;j++){
+    var o=offers['n'+j];
+    var row=document.getElementById('offer-row-'+j);
+    document.getElementById('offer-amt-'+j).textContent=o?fmtNT(o.amount):'尚未出價';
+    row.className='offer-row'+(o?' has':'')+(s&&s.lastBidder===j?' last':'')+(s&&s.deal&&s.deal.with===j?' deal':'');
+  }
+  document.getElementById('offer-note').textContent=(s&&s.note)||'';
+
+  // 中央提示
+  var hostHint=isHost()?'\n\n鍵盤：'+CARDS.map(function(k){return k.key+' '+k.title;}).join('　'):'';
+  if(phase==='idle'){
+    var why=(s&&s.endReason==='card_removed')?'職業卡已移除，面試中止。\n\n':'';
+    setCenter('請放上職業卡',why+'選一個你想應徵的職位'+hostHint);
+  }else if(phase==='ready'){
+    setCenter('應徵：'+(c?c.title:''),'請面對鏡頭，面試即將開始'+(isHost()?'\n（或按 Enter 直接開始）':''));
+  }else if(phase==='ended'){
+    if(s.endReason==='deal'&&s.deal)setCenter('成交！','與 '+s.deal.name+' 的企業成交\n月薪 '+fmtNT(s.deal.amount),'deal');
+    else setCenter('面試時間到','本次面試沒有成交\n拿起職業卡即可重新開始');
+  }else{
+    setCenter('');
+  }
+
+  // 下方提示與字幕
+  document.getElementById('vhint').textContent=(s&&s.hint)||'';
+  var sub='';
+  var t=s&&s.turn;
+  if(s&&s.status==='speaking'&&t&&t.speaker!==me)sub=getRole(t.speaker).name+'：'+t.text;
+  else if(s&&s.userText&&(s.status==='thinking'||s.status==='listening')&&phase!=='intro')sub='你：'+s.userText;
+  if(isHost()&&SR.interim&&(phase==='intro'||phase==='open'))sub='你：'+SR.interim;
+  var vt=document.getElementById('vtrans');vt.textContent=sub;vt.classList.toggle('active',!!sub);
+
+  // 自己角色的對話框與動作
+  var thinker=s?s.thinker:-1;
+  if(phase==='idle'||phase==='ready'){
+    setBubbleText('','empty');if(playingTurnId===null)set3DState('idle');
+  }else if(s.status==='speaking'&&t&&t.speaker===me){
+    setBubbleText(t.text,'speaking');
+  }else if(thinker===me||thinker===2){
+    setBubbleText('思考中','thinking');set3DState('thinking');
+  }else if(phase==='intro'){
+    setBubbleText('（聆聽你的自我介紹）','empty');set3DListeningFrom('user');
+  }else if(s.status==='speaking'&&t){
+    setBubbleText('','empty');set3DListeningFrom(t.speaker);
+  }else if(phase==='ended'){
+    if(t&&t.speaker===me)setBubbleText(t.text,'speaking');else setBubbleText('','empty');
+    if(playingTurnId===null)set3DState('idle');
+  }else{
+    if(t&&t.speaker===me)setBubbleText(t.text,'speaking');else setBubbleText('','empty');
+    if(playingTurnId===null)set3DListeningFrom('user');
+  }
+
+  // 出價特效
+  if(t&&t.offer&&t.id!==lastFlashTurnId&&s.status==='speaking'){
+    lastFlashTurnId=t.id;
+    var fl=document.getElementById('offer-flash');
+    fl.textContent=getRole(t.speaker).name+' 出價 '+fmtNT(t.offer)+(t.lower?'（低於對手）':'');
+    fl.className='offer-flash on'+(t.lower?' lower':'');
+    if(flashTimer)clearTimeout(flashTimer);
+    flashTimer=setTimeout(function(){fl.className='offer-flash';},4500);
+  }
+  tickTimer();
+}
+
+function tickTimer(){
+  var el=document.getElementById('hud-timer');if(!el)return;
+  var s=lastSession;
+  if(!s||!s.deadline||s.phase==='idle'||s.phase==='ready'){el.textContent='--:--';el.classList.remove('low');return;}
+  var ref=s.phase==='intro'?s.introEndsAt:s.deadline;
+  var left=Math.max(0,Math.ceil((ref-nowSrv())/1000));
+  if(s.phase==='ended'||s.phase==='deal')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
+  if(s.phase==='intro'){el.textContent='自介 '+left+'s';el.classList.toggle('low',left<=5);}
+  else{el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);el.classList.toggle('low',left<=30&&s.phase!=='ended');}
+}
+setInterval(tickTimer,250);
+
+// 輪到這台電腦的角色說話 → 念出來，念完回報 turnDone。
+// 主控電腦若發現另一台不在線，會代念對方的台詞（方便一台電腦測試）。
+function handleSpeaking(s){
+  var speakingNow=s&&s.status==='speaking'&&s.turn;
+  if(!speakingNow){
+    if(playingTurnId){stopSpeaking();playingTurnId=null;}
+    return;
+  }
+  var t=s.turn;
+  if(playingTurnId&&playingTurnId!==t.id){stopSpeaking();playingTurnId=null;}
+  if(!activeChar||localRoleIdx===null)return;
+  var mine=(t.speaker===localRoleIdx)||(isHost()&&!onlineRoles[t.speaker]);
+  if(!mine||spokenTurnId===t.id)return;
+  spokenTurnId=t.id;playingTurnId=t.id;
+  var v=getRole(t.speaker).voice||{};
+  if(t.speaker===localRoleIdx){set3DState('speaking');}
+  document.getElementById('swave').classList.add('on');
+  elevenSpeak(t.text,v.name||'',v.rate||1.0,v.stability!=null?v.stability:0.5,v.similarity||0.75,function(){
+    if(playingTurnId!==t.id)return;
+    playingTurnId=null;
+    document.getElementById('swave').classList.remove('on');
+    if(db)db.ref(SESSION_PATH).update({turnDone:t.id});
+    renderSession(lastSession);
+  });
+}
+
+function stopSpeaking(){
+  currentSpeakToken++;
+  clearCurrentAudioOnly();
+  try{speechSynthesis.cancel();}catch(e){}
+  var sw=document.getElementById('swave');if(sw)sw.classList.remove('on');
+}
+
+// ── 鏡頭：主控電腦偵測到體驗者面對鏡頭，就開始自我介紹 ──────
+var faceHeldSince=null;
+function onFaceResults(results){
+  if(!isHost()||!H||H.phase!=='ready')return;
+  if(!getBothEyesVisibleFromFaceResults(results)){faceHeldSince=null;return;}
+  if(!faceHeldSince)faceHeldSince=Date.now();
+  if(Date.now()-faceHeldSince>=FACE_HOLD_MS){faceHeldSince=null;startIntro();}
+}
+
+// ── 麥克風：開始面試後一直開著（主控電腦）─────────────────
+var SR={rec:null,on:false,introText:'',pending:'',interim:'',lastActivity:0};
+function startRecognition(){
+  if(SR.on)return;
+  var Rec=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Rec){showNotif('此瀏覽器不支援語音辨識，請用 Chrome；也可以按 T 打字');return;}
+  var r=new Rec();r.lang='zh-TW';r.interimResults=true;r.continuous=true;
+  r.onresult=function(e){
+    var interim='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var tx=e.results[i][0].transcript;
+      if(e.results[i].isFinal)handleFinalSpeech(tx);else interim+=tx;
+    }
+    SR.interim=interim.trim();SR.lastActivity=Date.now();
+    updateMicUI();
+    if(lastSession)renderSession(lastSession);
+  };
+  r.onerror=function(e){
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){showNotif('麥克風權限被拒絕，請允許麥克風；也可以按 T 打字');SR.on=false;}
+    else if(e.error!=='no-speech'&&e.error!=='aborted')console.warn('[SR]',e.error);
+  };
+  r.onend=function(){if(SR.on&&SR.rec===r){setTimeout(function(){if(SR.on&&SR.rec===r){try{r.start();}catch(err){}}},200);}};
+  SR.rec=r;SR.on=true;
+  try{r.start();}catch(e){console.warn('[SR] start',e);}
+  updateMicUI();
+}
+function stopRecognition(){
+  SR.on=false;SR.interim='';
+  var r=SR.rec;SR.rec=null;
+  if(r){try{r.abort();}catch(e){}}
+  updateMicUI();
+}
+function updateMicUI(){
+  var el=document.getElementById('mic-dot');if(!el)return;
+  el.classList.toggle('on',SR.on&&isHost());
+  el.classList.toggle('hot',SR.on&&!!SR.interim&&Date.now()-SR.lastActivity<USER_SILENCE_MS);
+}
+setInterval(updateMicUI,300);
+
+function normForEcho(s){return String(s||'').replace(/[\s，。！？、,.!?:：；;「」"'（）()…—\-]/g,'');}
+// 麥克風會收到兩台電腦喇叭念出的 AI 台詞。辨識結果如果大部分字詞都出現在
+// 最近的 AI 台詞裡，就當成回音丟掉，不算體驗者說的話。
+function isEcho(tx){
+  if(!H||!H.recentAi.length)return false;
+  var a=normForEcho(tx);if(a.length<2)return true;
+  var ai=normForEcho(H.recentAi.join(''));
+  if(a.length<=4)return ai.indexOf(a)>=0;
+  var hit=0,total=0;
+  for(var i=0;i<a.length-1;i++){total++;if(ai.indexOf(a.substr(i,2))>=0)hit++;}
+  return total>0&&hit/total>=0.6;
+}
+function handleFinalSpeech(tx){
+  tx=String(tx||'').trim();if(!tx||!H)return;
+  if(H.phase==='intro'){SR.introText+=(SR.introText?'，':'')+tx;return;}
+  if(H.phase==='open'){
+    if(isEcho(tx)){console.log('[SR] 回音，略過：',tx);return;}
+    SR.pending+=(SR.pending?'，':'')+tx;
+    return;
+  }
+  // round1（第一輪不插話）、deal、ended：不處理
+}
+// 打字代替說話（麥克風有問題時的備案，按 T）
+function hostInjectUserText(text){
+  text=String(text||'').trim();if(!text||!H)return;
+  if(H.phase==='intro'){SR.introText+=(SR.introText?'，':'')+text;H.introEndEarly=true;return;}
+  if(H.phase==='open'){SR.pending+=(SR.pending?'，':'')+text;SR.lastActivity=Date.now()-USER_SILENCE_MS-1;return;}
+  showNotif(H.phase==='round1'?'第一輪請先聆聽，等兩位說完再補充':'現在不能說話');
+}
+
+// ── 鍵盤（主控電腦）─────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(!activeChar||localRoleIdx===null||!isHost())return;
+  var tag=(e.target&&e.target.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+  if(document.getElementById('screen-chat').classList.contains('hidden'))return;
+  var k=e.key;
+  var card=cardByKey(k);
+  if(card){hostPlaceCard(card);return;}
+  if(k==='0'){hostRemoveCard();return;}
+  if(k==='Enter'){
+    if(H&&H.phase==='ready')startIntro();
+    else if(H&&H.phase==='intro')H.introEndEarly=true;
+    return;
+  }
+  if(k==='a'||k==='A'){hostHammer(0);return;}
+  if(k==='b'||k==='B'){hostHammer(1);return;}
+  if(k==='r'||k==='R'){hostReset('reset');return;}
+  if(k==='t'||k==='T'){
+    e.preventDefault();
+    var txt=window.prompt('輸入體驗者要說的話：');
+    if(txt)hostInjectUserText(txt);
+  }
+});
+
+// ── Arduino（Web Serial）：RFID 讀卡（TAG / TAG_OFF）與敲槌（HIT）──
+// demo 不需要；之後接硬體時在主控電腦的系統設定頁按「連接 Arduino」。
+var serialPorts=[];
+async function connectSerial(){
+  if(!('serial' in navigator)){showNotif('這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge');return;}
+  try{var port=await navigator.serial.requestPort();await openSerialPort(port);}
+  catch(e){if(e.name!=='NotFoundError')showNotif('連接失敗：'+e.message);}
+}
+async function openSerialPort(port){
+  if(serialPorts.indexOf(port)>=0)return;
+  await port.open({baudRate:115200});
+  serialPorts.push(port);
+  var st=document.getElementById('serial-status');if(st)st.textContent='已連接 '+serialPorts.length+' 個裝置';
+  var reader=port.readable.pipeThrough(new TextDecoderStream()).getReader();
+  var buf='';
+  (async function(){
+    try{
+      while(true){
+        var r=await reader.read();if(r.done)break;
+        buf+=r.value;var lines=buf.split(/\r?\n/);buf=lines.pop();
+        lines.forEach(function(l){handleSerialLine(l.trim());});
+      }
+    }catch(e){console.warn('[Serial] 讀取中斷',e.message);}
+  })();
+}
+function handleSerialLine(line){
+  if(!line||/^(DBG|INFO)/.test(line))return;
+  console.log('[Serial]',line);
+  if(line==='READY')return;
+  if(!isHost()||!activeChar)return;
+  if(line.indexOf('TAG_OFF:')===0){hostRemoveCard();return;}
+  if(line.indexOf('TAG:')===0){
+    var card=cardByUid(line.slice(4));
+    if(card)hostPlaceCard(card);else showNotif('未登錄的卡號：'+line.slice(4));
+    return;
+  }
+  if(line==='HIT'){showNotif('請按鍵盤 A 或 B 選擇成交對象');}
+}
+if('serial' in navigator){
+  navigator.serial.getPorts().then(function(ports){ports.forEach(function(p){openSerialPort(p).catch(function(){});});});
+}
+
+buildSetupPanels();
+speechSynthesis.onvoiceschanged=function(){speechSynthesis.getVoices();};speechSynthesis.getVoices();
 waitForFirebase();
-
 </script>
 </body>
 </html>

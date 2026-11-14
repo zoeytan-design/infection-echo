@@ -1222,7 +1222,7 @@ async function loadElevenVoices(){
     return fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});
   }).then(function(resp){return resp.json();}).then(function(data){
     if(!data.voices)throw new Error(data.detail?JSON.stringify(data.detail):JSON.stringify(data));
-    voiceList=data.voices;voiceList.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;voiceListPromise=null;return voiceCache;
+    voiceList=data.voices;voiceList.forEach(function(v){voiceCache[v.name]=v.voice_id;voiceCache[String(v.name).trim()]=v.voice_id;});voiceListLoaded=true;voiceListPromise=null;return voiceCache;
   }).catch(function(e){console.warn('Voice preload failed:',e.message||e);voiceListPromise=null;return null;});
   return voiceListPromise;
 }
@@ -1354,7 +1354,7 @@ async function testElevenLabs(){
     var idToken=await getAuthToken();
     var resp=await fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});var data=await resp.json();
     if(!data.voices){showNotif('API錯誤：'+JSON.stringify(data));return;}
-    voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;
+    voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;voiceCache[String(v.name).trim()]=v.voice_id;});voiceListLoaded=true;
     var zhVoice=data.voices.find(function(v){return v.labels&&v.labels.language==='zh';});var testVoice=zhVoice||data.voices[0];
     if(!testVoice){showNotif('找不到任何聲音');return;}showNotif('找到聲音：'+testVoice.name+'\n正在生成語音...');
     var idToken2=await getAuthToken();
@@ -1371,7 +1371,7 @@ async function fetchVoiceList(){
     var idToken=await getAuthToken();
     var resp=await fetch(WORKER_BASE+'/eleven/v1/voices',{headers:{'Authorization':'Bearer '+idToken}});var data=await resp.json();
     if(data.voices){
-      voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;});voiceListLoaded=true;
+      voiceList=data.voices;data.voices.forEach(function(v){voiceCache[v.name]=v.voice_id;voiceCache[String(v.name).trim()]=v.voice_id;});voiceListLoaded=true;
       var html=data.voices.map(function(v){return '<b style="color:#c4a0f0;">'+esc(v.name)+'</b> — '+esc(v.voice_id)+(v.labels&&v.labels.language?' ('+esc(v.labels.language)+')':'');}).join('<br>');
       document.getElementById('voice-list-content').innerHTML=html||'沒有找到聲音';showNotif('找到 '+data.voices.length+' 個聲音，請複製名稱填入上方');
     }else{document.getElementById('voice-list-content').textContent=JSON.stringify(data);}
@@ -1443,16 +1443,27 @@ function startFb(){
     document.querySelectorAll('.btn-p').forEach(function(b){b.disabled=false;});
     if(started)return;
     started=true;
-    db.ref('chars').on('value',function(s){
-      charsData=s.val()||{};
-      renderRoleList();
-      fillSetupPanels();
-      preloadPublishedVoices({node0:getRole(0),node1:getRole(1)});
-    });
-    listenToPresence();
-    listenToSession();
+    // 資料庫規則要求登入時，必須先完成匿名登入才能讀寫，否則監聽會被拒絕
+    ensureAuthReady().then(function(){
+      db.ref('chars').on('value',function(s){
+        charsData=s.val()||{};
+        renderRoleList();
+        fillSetupPanels();
+        preloadPublishedVoices({node0:getRole(0),node1:getRole(1)});
+      },fbDenied);
+      listenToPresence();
+      listenToSession();
+    }).catch(function(e){fbDenied(e);});
+    renderRoleList();
     showScreen('screen-select');
   });
+}
+function fbDenied(e){
+  var msg=(e&&(e.code||e.message))||'unknown';
+  console.error('[Firebase] 讀寫被拒絕：',msg);
+  var el=document.getElementById('fb-status');
+  if(el){el.textContent='✕ Firebase 讀寫被拒絕（'+msg+'）：請檢查 Realtime Database 規則';el.className='fb-status err';}
+  showNotif('Firebase 讀寫被拒絕\n請檢查 Realtime Database 的規則設定');
 }
 function listenToPresence(){
   if(presenceListenerStarted||!db)return;
@@ -1461,12 +1472,12 @@ function listenToPresence(){
     var raw=snap.val()||{};var parsed={};
     for(var i=0;i<2;i++){var node=raw['node'+i]||{};parsed[i]=Object.keys(node).length>0;}
     onlineRoles=parsed;
-  });
+  },fbDenied);
 }
 function listenToSession(){
   if(sessionListenerStarted||!db)return;
   sessionListenerStarted=true;
-  db.ref(SESSION_PATH).on('value',function(snap){onSessionUpdate(snap.val());});
+  db.ref(SESSION_PATH).on('value',function(snap){onSessionUpdate(snap.val());},fbDenied);
 }
 
 // ── 角色設定頁 ─────────────────────────────────────────
@@ -1889,11 +1900,13 @@ var FALLBACK_LINES={
   0:{default:'你的回答還不足以說服我。請給我一個具體的成果。',warn:'你還沒有聽到我的條件就想結束？你不想面試了嗎？',deal_win:'很好。希望你的表現能證明這個價格是合理的。',deal_lose:'這是你的選擇。我會把這個結果記錄進我的模型。'},
   1:{default:'等等，這個想法很有意思，再多說一點！',warn:'欸，我都還沒開價耶，你這樣就要走了？你不想面試了嗎？',deal_win:'太好了！我已經開始期待你會提出什麼問題了！',deal_lose:'好吧，可惜了。不過你會後悔沒選一個更有趣的地方喔。'}
 };
+var lastAiErrorNotif=0;
 async function genSafe(i,ctx){
   try{
     return await generateLine(i,ctx);
   }catch(e){
     console.error('[AI] 生成失敗',i,ctx&&ctx.kind,e.message);
+    if(Date.now()-lastAiErrorNotif>8000){lastAiErrorNotif=Date.now();showNotif('AI 生成失敗，改用備用台詞：\n'+String(e.message).slice(0,80));}
     var fb=FALLBACK_LINES[i]||FALLBACK_LINES[0];
     return {bid:false,salary:0,reverse:'none',spokenText:fb[ctx&&ctx.kind]||fb.default,failed:true};
   }

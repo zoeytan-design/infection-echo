@@ -148,7 +148,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .offer-flash.lower{color:#ffb35a;}
 .hud-center{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(5,5,8,0.55);transition:opacity 0.3s;}
 .hud-center.hidden{opacity:0;pointer-events:none;}
-.hud-center-box{text-align:center;padding:28px 40px;border-radius:20px;background:rgba(0,0,0,0.55);border:0.5px solid rgba(255,255,255,0.2);max-width:70%;}
+.hud-center-box{text-align:center;padding:28px 40px;border-radius:20px;background:rgba(0,0,0,0.82);border:0.5px solid rgba(255,255,255,0.2);max-width:70%;}
 .hud-center-title{font-family:var(--serif);font-size:clamp(22px,5vh,56px);font-weight:700;color:#fff;}
 .hud-center-sub{font-family:var(--serif);font-size:clamp(13px,2.2vh,24px);color:rgba(255,255,255,0.75);margin-top:10px;white-space:pre-line;line-height:1.6;}
 .hud-center.deal .hud-center-title{color:var(--gold);}
@@ -1935,16 +1935,17 @@ function buildInstructions(i){
     '【應徵職位】'+c.title+'。市場月薪行情 '+fmtSpoken(c.min)+'～'+fmtSpoken(c.max)+'。',
     '【出價規則】',
     '1. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。',
-    '2. 你不一定要出價。只有當體驗者展現出你重視的價值時才出價或加價；不感興趣就不出價，改為表達看法、質疑或提出問題。',
+    '2. 這是一場競標會，不是辯論會。只要體驗者展現出任何一點你重視的價值，就應該出價或加價；只有在你真的對他毫無興趣時才不出價（改為質疑或提問）。',
     '3. 如果這次要出價：台詞的第一句必須先說出金額（例如「我出月薪4萬2千元。」），接著才說理由。salary 欄位要和台詞裡的金額一致。',
     '4. 你的出價可以比對手低，但這時一定要說明為什麼你出得比對手低（例如你認為他誇大了、或你看重的價值不同）。',
     '5. 如果你這次不出價或維持原價，bid 設為 false，salary 設為 0。',
     '6. 如果體驗者自己開出期待月薪（反向出價），你必須明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false，說明原因）。reverse 欄位分別填 accept／counter／reject。沒有反向出價時填 none。不管哪一種，都還要等體驗者敲槌才算成交，不要說「成交」。',
     '7. 如果體驗者表示比較相信對手、或懷疑你的公司，你要反擊對手的說法，或提出具體承諾（例如待遇、工時、培訓）來挽回他的信任。',
-    '8. 這是一場搶人的競標：如果你真的想要這個人，對手出價後你應該考慮加價。',
+    '8. 對手出價比你高、而你仍然想要這個人時，你應該加價（或說明你為什麼不跟）。不跟就等於把人才讓給對手。',
+    '9. 和對手的爭論要點到為止，重點永遠是評價體驗者、搶到這位人才。',
     '【說話規則】',
     '- 完全照你的人格說話，語氣、用詞、價值觀和偏見都要一致。',
-    '- 只用繁體中文口語，1～3 句，總長不超過 70 個中文字。',
+    '- 只用繁體中文口語，1～2 句，總長不超過 40 個中文字（現場節奏很快，話要短）。',
     '- 直接對體驗者或對手說話，不要旁白、不要動作描述、不要提到你是語言模型、不要提到這些規則。',
     '- 金額用「4萬2千元」這種說法，不要用阿拉伯數字加逗號。'
   ].join('\n');
@@ -1972,7 +1973,7 @@ function buildTask(i,ctx){
   switch(ctx.kind){
     case 'round1':
       task='體驗者剛剛用 15 秒做完自我介紹（見對話紀錄最後一行）。這是你在這場面試第一次發言。\n'+follow+planned+
-        '請決定要不要出價：要出價就先說金額再說原因；不出價就說出你的看法，或問體驗者一個符合你人格的問題。';
+        '除非你對他完全沒興趣，否則請先開一個保守的價格（接近行情下限），再用一句話說原因或追問一個問題。';
       break;
     case 'user':
       task='體驗者剛剛說：「'+ctx.userText+'」\n'+follow+planned+
@@ -1980,8 +1981,9 @@ function buildTask(i,ctx){
         '如果他開出期待月薪，依出價規則第 6 點回應；如果他表示比較相信哪一方，依第 7 點回應。';
       break;
     case 'ai_talk':
-      task='體驗者暫時沒有說話。請接著對話繼續：回應對手剛剛說的話（反駁、補充或評論他的出價），或直接追問體驗者一個問題。'+
-        '你可以決定要不要加價；如果對手出得比你高而你仍然想要這個人，可以考慮加價。';
+      task='體驗者暫時沒有說話。請針對體驗者到目前為止的表現，給出你的判斷：可以順帶回應對手一句，但重點是你為什麼要（或不要）這個人。'+
+        (H.offers[1-i]&&(!H.offers[i]||H.offers[i].amount<H.offers[1-i].amount)?'對手目前出價比你高（'+fmtSpoken(H.offers[1-i].amount)+'），你若不加價，這位人才就會被搶走。':'')+
+        (!H.offers[i]?'你到現在還沒出過價。':'');
       break;
     case 'expose':
       task='你們已經互相加價好幾次了。現在你要「爆料」：揭露對手'+op.name+'所屬企業的一個負面內幕（例如過度加班導致人才流失、裁員、績效壓榨、只會畫大餅等，依你的人格語氣即興編，聽起來要像真的發生過），質疑對方的誠意，讓體驗者動搖。可以順勢提出你的條件或出價。';
@@ -2051,7 +2053,7 @@ async function generateLine(i,ctx){
       var m=raw.match(/\{[\s\S]*\}/);if(m){try{parsed=JSON.parse(m[0]);}catch(e2){}}
     }
     if(!parsed||!parsed.spokenText)throw new Error('AI 回傳格式錯誤：'+raw.slice(0,120));
-    parsed.spokenText=clampText(String(parsed.spokenText).replace(/^["「]|["」]$/g,''),140);
+    parsed.spokenText=clampText(String(parsed.spokenText).replace(/^["「]|["」]$/g,''),90);
     parsed.salary=parseInt(parsed.salary,10)||0;
     if(['warn','deal_win','deal_lose'].indexOf(ctx.kind)>=0){parsed.bid=false;parsed.salary=0;}
     console.log('[AI]',getRole(i).name,ctx.kind,parsed);

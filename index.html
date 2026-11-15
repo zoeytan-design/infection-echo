@@ -2241,12 +2241,12 @@ function extractOpenAIText(data){
   return '';
 }
 
-async function rewriteWithoutQuestion(i,line){
+async function rewriteWithoutQuestion(i,line,amount){
   var idToken=await getAuthToken();
   var body=JSON.stringify({
     model:OPENAI_MODEL,
     input:[
-      {role:'developer',content:[{type:'input_text',text:'你是'+getRole(i).name+'。把下面這句面試台詞改寫成「不含任何問句」的版本：保留原本的金額、出價理由，以及對體驗者的期待或條件，語氣和人格不變，1～2 句、40 字以內，台灣繁體中文。只輸出改寫後的台詞。'}]},
+      {role:'developer',content:[{type:'input_text',text:'你是'+getRole(i).name+'，正在面試時對體驗者開出月薪 '+fmtSpoken(amount)+'。把下面這句台詞改寫成一句出價的話：先說出「'+fmtSpoken(amount)+'」這個金額（說法自然，不一定要用「我出月薪」開頭），再保留原本的理由，加上你對體驗者的期待或能給他的條件。不可以有任何問句。語氣和人格不變，1～2 句、40 字以內，台灣繁體中文。只輸出改寫後的台詞。'}]},
       {role:'user',content:[{type:'input_text',text:line}]}
     ],
     temperature:0.4,max_output_tokens:120
@@ -2298,9 +2298,9 @@ async function generateLine(i,ctx){
     if(['round1','user'].indexOf(ctx.kind)<0||(ctx.kind==='round1'&&H.noIntro)){parsed.bid=false;parsed.salary=0;}
     parsed.wantToSpeak=Math.max(0,Math.min(10,parseInt(parsed.wantToSpeak,10)||0));
     // 出價的這句不能有問句：有的話請 AI 改寫一次（保留金額、原因與期待）
-    if(parsed.bid&&/[？?]/.test(parsed.spokenText)){
+    if(parsed.bid&&parsed.salary>0&&(/[？?]/.test(parsed.spokenText)||!findSpokenAmounts(parsed.spokenText).length)){
       try{
-        var fixed=await rewriteWithoutQuestion(i,parsed.spokenText);
+        var fixed=await rewriteWithoutQuestion(i,parsed.spokenText,parsed.salary);
         if(fixed&&!/[？?]/.test(fixed)&&findSpokenAmounts(fixed).length)parsed.spokenText=fixed;
       }catch(e){console.warn('[AI] 改寫失敗',e.message);}
     }

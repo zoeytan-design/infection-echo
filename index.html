@@ -1947,6 +1947,19 @@ function pickSpokenOffer(text,reported,otherAmt){
   if(!best&&list.length===1&&list[0].v!==otherAmt)best=list[0].v;
   return best;
 }
+// 把台詞裡最後一個金額（例如「20萬元」「5萬2」）換成指定金額；找不到就加在句首
+function replaceSpokenAmount(text,amt){
+  var list=findSpokenAmounts(text);
+  if(!list.length)return fmtSpoken(amt)+'。'+text;
+  var sp=list[list.length-1];
+  var rest=text.slice(sp.pos);
+  var m=rest.match(/^[0-9０-９零〇一二兩三四五六七八九十萬千百,，]*?(元|萬|千|[0-9０-９])(元)?/);
+  var len=m?m[0].length:1;
+  // 往後吃掉金額本體（數字、萬、千、百）和「元」
+  var mm=rest.match(/^[0-9０-９零〇一二兩三四五六七八九十萬千百,]+元?/);
+  if(mm)len=mm[0].length;
+  return text.slice(0,sp.pos)+fmtSpoken(amt)+text.slice(sp.pos+len);
+}
 function parseSpokenAmount(text){var l=findSpokenAmounts(text);return l.length?l[0].v:0;}
 function hasSpokenAmount(text){return /[0-9０-９]|萬|千/.test(String(text||'').slice(0,30));}
 
@@ -1959,11 +1972,30 @@ async function speakTurn(runId,i,res,kind,opts){
   // 只有體驗者說過話之後才能出價：第一輪（自介有說話時）和回應體驗者時；每人每次最多一次
   var canBid=((kind==='round1'&&!H.noIntro)||kind==='user')&&!H.bidSinceUser[i];
   if(!canBid&&res){res.bid=false;}
+  // 不能出價時，台詞裡如果有「我加到／我出……」這種自己開新價的句子，整句拿掉，避免念出來的價錢和出價卡對不上
+  if(!canBid&&['deal_win','deal_lose'].indexOf(kind)<0){
+    var myAmt=H.offers[i]?H.offers[i].amount:0;
+    var parts=text.match(/[^。！？!?]+[。！？!?]?/g)||[text];
+    var keepParts=parts.filter(function(x){
+      var a=pickSpokenOffer(x,0,H.offers[1-i]?H.offers[1-i].amount:0);
+      var selfBid=a&&a!==myAmt&&/我[^，。！？]{0,4}?(出|給|開|加|提高|跟)/.test(x);
+      return !selfBid;
+    });
+    if(keepParts.length!==parts.length){
+      console.warn('[host] 拿掉不允許的出價句：',text);
+      text=keepParts.join('').trim()||((FALLBACK_LINES[i]||FALLBACK_LINES[0]).default);
+    }
+  }
   var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary,H.offers[1-i]?H.offers[1-i].amount:0):0;
   if(canBid&&spokenAmt&&/^[^，。！？]{0,6}?我[^，。！？]{0,4}?(出|給|開|加|提高)/.test(text)){res.bid=true;res.salary=spokenAmt;}
   else if(canBid&&res.bid&&spokenAmt&&spokenAmt!==res.salary){res.salary=spokenAmt;}
   if(canBid&&res.bid&&res.salary>0){
     var amt=clampSalary(res.salary);
+    if(amt!==Math.round(Number(res.salary)/500)*500){
+      // 超出範圍被調整：念出來的金額也要一致
+      text=replaceSpokenAmount(text,amt);
+      if(res.reverse==='accept')res.reverse='counter';
+    }
     var prev=H.offers[i];
     if(!prev||prev.amount!==amt){
       var other=H.offers[1-i];
@@ -2124,7 +2156,7 @@ function buildInstructions(i){
     '3. 出價時先說出金額，再說為什麼他值這個價、你對他有什麼期待或能給他什麼條件。出價的這句不要問任何問題。說法要有變化、像你這個人會說的話，不要每次都用「我出月薪」開頭。',
     '4. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。salary 要和台詞裡的金額一致，同一句金額只說一次。金額用「4萬2千元」這種說法。',
     '5. 你的出價可以比對手低，但要說明為什麼。不出價時 bid=false、salary=0。',
-    '6. 如果體驗者開出期待月薪（反向出價），你要明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false）。reverse 分別填 accept／counter／reject，沒有反向出價時填 none。都要等體驗者敲槌才算成交，不要說「成交」。',
+    '6. 如果體驗者開出期待月薪（反向出價），你要明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false）。他開的金額超過 '+salaryCap(c)+' 元時不能接受，只能還價或拒絕。reverse 分別填 accept／counter／reject，沒有反向出價時填 none。都要等體驗者敲槌才算成交，不要說「成交」。',
     '7. 如果體驗者表示比較相信對手、或質疑你的公司，你要正面回應：反擊對手的說法，或提出具體承諾把他的信任拉回來。',
     '【回傳欄位】',
     '- wantToSpeak：0～10，你現在有多想接話。體驗者的話正好碰到你在意的點、或你想反駁對手，就給高分；跟你沒什麼關係、或對手已經說得差不多，就給低分。',

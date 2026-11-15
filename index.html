@@ -1386,7 +1386,9 @@ function fallbackSpeak(text,onDone,speakToken){
   u.lang='zh-TW';
   u.onend=finish;
   u.onerror=finish;
-  speechSynthesis.speak(u);
+  // 瀏覽器內建語音有時不會觸發 onend（例如沒有中文語音或被擋），時間到就當作念完
+  setTimeout(finish,2500+String(text).length*350);
+  try{speechSynthesis.speak(u);}catch(e){finish();}
 }
 async function testElevenLabs(){
   if(!workerReady()){showNotif('Proxy 尚未設定（WORKER_BASE）');return;}showNotif('測試中...');
@@ -2019,7 +2021,7 @@ function turnNote(t){
   return '';
 }
 async function waitTurnDone(runId,turn,allowDeal){
-  var limit=Date.now()+20000+turn.text.length*450;
+  var limit=Date.now()+14000+turn.text.length*350;
   while(Date.now()<limit){
     if(!hostAlive(runId,allowDeal))return;
     if(lastSession&&lastSession.turnDone===turn.id)return;
@@ -2459,13 +2461,21 @@ function handleSpeaking(s){
   var v=getRole(t.speaker).voice||{};
   if(t.speaker===localRoleIdx){set3DState('speaking');}
   document.getElementById('swave').classList.add('on');
-  elevenSpeak(t.text,v.name||'',v.rate||1.0,v.stability!=null?v.stability:0.5,v.similarity||0.75,function(){
-    if(playingTurnId!==t.id)return;
-    playingTurnId=null;
+  var reported=false;
+  function done(){
+    if(reported)return;reported=true;
+    if(playingTurnId===t.id){playingTurnId=null;}
     document.getElementById('swave').classList.remove('on');
     if(db)db.ref(SESSION_PATH).update({turnDone:t.id});
     renderSession(lastSession);
-  });
+  }
+  elevenSpeak(t.text,v.name||'',v.rate||1.0,v.stability!=null?v.stability:0.5,v.similarity||0.75,done);
+  // 保險：語音下載或播放卡住時，不讓整場面試停住
+  setTimeout(function(){
+    if(reported||playingTurnId!==t.id)return;
+    console.warn('[speak] 播放逾時，略過這句的語音',t.id);
+    stopSpeaking();done();
+  },9000+String(t.text).length*300);
 }
 
 function stopSpeaking(){

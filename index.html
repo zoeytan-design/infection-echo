@@ -1879,8 +1879,21 @@ async function respondBoth(runId,ctx){
 
 // 體驗者說話之後：兩位各自決定「多想接話」，比較想說的先講（同分時出價的先講）；
 // 另一位聽完第一位後再決定要不要接話——有話才說，像真人對話一樣不一定每個人都回應。
+// 體驗者話裡的期待月薪（反向出價），例如「我希望月薪四萬五」「我要5萬」
+function userAskedSalary(text){
+  var t=String(text||'');
+  if(!/(希望|想要|期待|要求|我要|開價|至少|月薪|薪水|值)/.test(t))return 0;
+  var list=findSpokenAmountsAll(t);
+  for(var k=list.length-1;k>=0;k--)if(list[k].v>=10000&&list[k].v<=500000)return list[k].v;
+  return 0;
+}
+function findSpokenAmountsAll(t){
+  var out=[],i=0;
+  while(i<t.length){out=out.concat(findSpokenAmounts(t.slice(i,i+60)).map(function(x){return {v:x.v,pos:x.pos+i};}));i+=50;}
+  return out;
+}
 async function respondUser(runId,userText){
-  var ctx={kind:'user',userText:userText};
+  var ctx={kind:'user',userText:userText,userAsk:userAskedSalary(userText)};
   H.status='thinking';H.thinker=2;hostPublish();
   var res=await Promise.all([genSafe(0,ctx),genSafe(1,ctx)]);
   if(!hostAlive(runId))return;
@@ -1888,7 +1901,7 @@ async function respondUser(runId,userText){
   var first=score(res[0])>=score(res[1])?0:1,second=1-first;
   var secondWants=(res[second].wantToSpeak||0)>=WANT_TO_SPEAK_MIN||res[second].bid||res[second].reverse!=='none';
   var secondP=null;
-  var ok=await speakTurn(runId,first,res[first],'user',{nextThinker:secondWants?second:-1,onStart:function(){
+  var ok=await speakTurn(runId,first,res[first],'user',{userAsk:ctx.userAsk,nextThinker:secondWants?second:-1,onStart:function(){
     if(secondWants)secondP=genSafe(second,Object.assign({},ctx,{follow:true,plannedBid:res[second].bid}));
   }});
   if(!ok||!hostAlive(runId)||!secondP)return;
@@ -1897,7 +1910,7 @@ async function respondUser(runId,userText){
   // 第一位已經在問體驗者問題時，第二位要很想說才插話，否則把話留給體驗者
   var need=(H.turn&&H.turn.askUser)?7:WANT_TO_SPEAK_MIN;
   if((r2.wantToSpeak||0)<need&&!r2.bid&&r2.reverse==='none')return;
-  await speakTurn(runId,second,r2,'user');
+  await speakTurn(runId,second,r2,'user',{userAsk:ctx.userAsk});
 }
 
 function clampSalary(n){
@@ -2033,10 +2046,23 @@ async function speakTurn(runId,i,res,kind,opts){
     text=out.join('').trim();
     if(!hasSpokenAmount(text))text=fmtSpoken(offer)+'。'+text;
   }
+  if(offer){
+    // 同一句裡金額只說一次：後面重複提到同一個金額的句子拿掉
+    var ss=text.match(/[^。！？!?]+[。！？!?]?/g)||[text],seen=false,res2=[];
+    ss.forEach(function(x){
+      var has=findSpokenAmounts(x).some(function(a){return a.v===offer;});
+      if(has&&seen)return;
+      if(has)seen=true;
+      res2.push(x);
+    });
+    text=res2.join('').trim()||text;
+  }
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
   if(kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
-  var turn={id:randId('t'),at:nowSrv(),speaker:i,text:text,offer:offer,lower:lower,kind:kind,reverse:(res&&res.reverse)||'none',askUser:askUser};
+  var rev=(res&&res.reverse)||'none';
+  if(kind==='user'&&opts.userAsk&&rev==='none'&&offer)rev=(offer>=opts.userAsk)?'accept':'counter';
+  var turn={id:randId('t'),at:nowSrv(),speaker:i,text:text,offer:offer,lower:lower,kind:kind,reverse:rev,askUser:askUser};
   H.turn=turn;H.lastSpeaker=i;H.status='speaking';
   H.aiStreak=askUser?0:(H.aiStreak||0)+1;
   H.thinker=(opts.nextThinker==null?-1:opts.nextThinker);
@@ -2219,7 +2245,8 @@ function buildTask(i,ctx){
     case 'user':
       task='體驗者剛剛說：「'+ctx.userText+'」\n'+follow+planned+
         '請針對他這句話回應。他提出了符合你價值觀的具體事例、讓你更想要他，就出價或加價；只是泛泛的自我評價就不要加，改為追問、質疑或評論。'+
-        '如果他開出期待月薪，依出價規則第 6 點回應；如果他表示比較相信'+op.name+'或質疑你的公司，依第 7 點回應；如果他表示比較相信你，可以趁勢鞏固，但不要得意忘形。'+
+        (ctx.userAsk?'【重要】他開出期待月薪 '+fmtSpoken(ctx.userAsk)+'。你這句一定要明確回應這個金額：接受（照付 '+fmtSpoken(ctx.userAsk)+'）、還價（說出你的金額和為什麼不是 '+fmtSpoken(ctx.userAsk)+'）、或拒絕（說明原因），並填 reverse。'+(ctx.userAsk>salaryCap(c)?'這個金額超過上限，不能接受。':''):'')+
+        '如果他表示比較相信'+op.name+'或質疑你的公司，依第 7 點回應；如果他表示比較相信你，可以趁勢鞏固，但不要得意忘形。'+
         (askedAlready?'對手剛剛已經問了體驗者問題，除非你非說不可，否則不要再問另一個問題，把回答的空間留給體驗者。':'');
       break;
     case 'ai_talk':

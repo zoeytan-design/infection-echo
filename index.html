@@ -2068,10 +2068,14 @@ async function speakTurn(runId,i,res,kind,opts){
     if(offer){
       rev=(offer>=ask)?'accept':'counter';
       if(!mentionsAsk){
-        var rest=text;
-        var lead=findSpokenAmounts(text);
-        if(lead.length&&lead[0].pos<=2){var cut=text.search(/[，。！!,]/);rest=cut>=0?text.slice(cut+1):'';}
-        rest=rest.replace(/^[，。\s]+/,'');
+        // 把原句裡提到金額的片段和（還價時）「接受」字眼拿掉，剩下的當作理由
+        var clauses=text.match(/[^，。！？!?,]+[，。！？!?,]?/g)||[text];
+        var rest=clauses.filter(function(c){
+          if(findSpokenAmounts(c).length)return false;
+          if(offer<ask&&/接受/.test(c))return false;
+          if(c.replace(/[，。！？!?,\s]/g,'').length<=2)return false; // 「好，」「嗯，」這類語助詞
+          return true;
+        }).join('').replace(/^[，。\s]+/,'').trim();
         text='你開'+fmtSpoken(ask)+'，'+(offer>=ask?(offer===ask?'我接受':'我給你'+fmtSpoken(offer)):'我給'+fmtSpoken(offer))+(rest?'，'+rest:'。');
       }
     }else if(!mentionsAsk){

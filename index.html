@@ -1972,11 +1972,18 @@ async function speakTurn(runId,i,res,kind,opts){
     }
   }
   // 規則：出價的這句只講金額、原因和期待，不追問問題（問題留給下一句或另一位）
-  if(offer){
+  if(offer&&/[？?]/.test(text)){
+    // 保險：AI 重寫後仍有問句時，刪掉問句，但保留含金額的那一小段
     var sents=text.match(/[^。！？!?]+[。！？!?]?/g)||[text];
-    var kept=sents.filter(function(x){return !/[？?]\s*$/.test(x);});
-    if(!kept.length)kept=[sents[0].replace(/[？?]\s*$/,'。')];
-    text=kept.join('').trim();
+    var out=[];
+    sents.forEach(function(x){
+      if(!/[？?]\s*$/.test(x)){out.push(x);return;}
+      var cl=x.split('，'),keep=[];
+      for(var q=0;q<cl.length;q++){keep.push(cl[q]);if(findSpokenAmounts(cl[q]).length)break;}
+      if(findSpokenAmounts(keep.join('，')).length)out.push(keep.join('，').replace(/[？?]\s*$/,'')+'。');
+    });
+    text=out.join('').trim();
+    if(!hasSpokenAmount(text))text=fmtSpoken(offer)+'。'+text;
   }
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
@@ -2234,6 +2241,21 @@ function extractOpenAIText(data){
   return '';
 }
 
+async function rewriteWithoutQuestion(i,line){
+  var idToken=await getAuthToken();
+  var body=JSON.stringify({
+    model:OPENAI_MODEL,
+    input:[
+      {role:'developer',content:[{type:'input_text',text:'你是'+getRole(i).name+'。把下面這句面試台詞改寫成「不含任何問句」的版本：保留原本的金額、出價理由，以及對體驗者的期待或條件，語氣和人格不變，1～2 句、40 字以內，台灣繁體中文。只輸出改寫後的台詞。'}]},
+      {role:'user',content:[{type:'input_text',text:line}]}
+    ],
+    temperature:0.4,max_output_tokens:120
+  });
+  var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:body});
+  if(!resp.ok)throw new Error('HTTP '+resp.status);
+  var t=extractOpenAIText(await resp.json());
+  return toTaiwanTerms(String(t||'').trim().replace(/^["「]|["」]$/g,''));
+}
 async function generateLine(i,ctx){
   if(!workerReady())throw new Error('Proxy 尚未設定');
   var body=JSON.stringify({
@@ -2275,6 +2297,13 @@ async function generateLine(i,ctx){
     parsed.salary=parseInt(parsed.salary,10)||0;
     if(['round1','user'].indexOf(ctx.kind)<0||(ctx.kind==='round1'&&H.noIntro)){parsed.bid=false;parsed.salary=0;}
     parsed.wantToSpeak=Math.max(0,Math.min(10,parseInt(parsed.wantToSpeak,10)||0));
+    // 出價的這句不能有問句：有的話請 AI 改寫一次（保留金額、原因與期待）
+    if(parsed.bid&&/[？?]/.test(parsed.spokenText)){
+      try{
+        var fixed=await rewriteWithoutQuestion(i,parsed.spokenText);
+        if(fixed&&!/[？?]/.test(fixed)&&findSpokenAmounts(fixed).length)parsed.spokenText=fixed;
+      }catch(e){console.warn('[AI] 改寫失敗',e.message);}
+    }
     console.log('[AI]',getRole(i).name,ctx.kind,parsed);
     return parsed;
   }

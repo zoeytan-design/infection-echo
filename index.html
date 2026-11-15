@@ -180,6 +180,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .key-tip.on{display:block;}
 .chat-back-float{top:auto;bottom:8px;right:12px;opacity:0.35;font-size:10px;padding:4px 10px;}
 .chat-phone{container-type:inline-size;}
+.mic-debug{position:absolute;left:12px;top:15%;z-index:30;max-width:46%;margin:0;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,0.82);color:#b8ffef;font:11px/1.55 var(--mono);white-space:pre-wrap;display:none;}
+.mic-debug.on{display:block;}
 </style>
 </head>
 <body>
@@ -261,8 +263,9 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
       </div>
 
       <div class="hud-center hidden" id="hud-center"><div class="hud-center-box"><div class="hud-center-title" id="hud-center-title"></div><div class="hud-center-sub" id="hud-center-sub"></div></div></div>
-      <div class="key-legend" id="key-legend">1–5 放卡 · 0 拿卡 · Enter 開始／結束自介 · A / B 敲槌成交 · T 打字代替說話 · R 重置 · H 隱藏說明</div>
-      <div class="key-tip" id="key-tip">H：按鍵說明</div>
+      <div class="key-legend" id="key-legend">1–5 放卡 · 0 拿卡 · Enter 開始／結束自介 · A / B 敲槌成交 · T 打字代替說話 · R 重置 · D 收音診斷 · H 隱藏說明</div>
+      <div class="key-tip" id="key-tip">H：按鍵說明　D：收音診斷</div>
+      <pre class="mic-debug" id="mic-debug"></pre>
       <button class="chat-back-float" onclick="goBack()">← 返回</button>
     </div>
   </div>
@@ -937,14 +940,15 @@ var LISTEN_WINDOW_MS=1500;    // AI 說完一句（沒有問體驗者）後，�
 var ASK_WINDOW_MS=8000;       // 有人問體驗者問題時，等他回答的時間
 var PRODS_BEFORE_BANTER=2;    // 連續幾次問了沒回答後，兩位 AI 先互相聊幾句
 var WANT_TO_SPEAK_MIN=4;      // 第二位 AI 想接話的程度（0～10）至少多少才開口
-var USER_SILENCE_MS=1300;     // 體驗者停頓多久算講完
+var USER_SILENCE_MS=1500;     // 體驗者停頓多久算講完
 var USER_MAX_TALK_MS=25000;   // 體驗者一次最多講多久
 var FACE_HOLD_MS=1500;        // 臉要對準鏡頭多久才開始
 var EXPOSE_MAX=2;             // 一場最多爆料幾次（兩位都開過價後才可能發生）
 var EXPOSE_CHANCE=0.35;       // 每次符合條件時觸發爆料的機率
 var EXPOSE_GAP_MS=25000;      // 兩次爆料至少間隔多久
 var SALARY_CAP_RATIO=1.3;     // 出價上限 = 職缺行情上限 × 這個倍數
-var MAX_RAISE_RATIO=1.3;      // 每次出價最多比目前雙方最高出價多幾成（第一次開價以行情下限為基準）
+var MAX_RAISE_RATIO=1.4;      // 每次出價最多比目前雙方最高出價多幾成
+var FIRST_BID_POS=0.7;        // 第一次開價最高到行情範圍的哪個位置（0＝下限，1＝上限）
 
 // ── 職業卡（RFID 卡號 → 職缺）──────────────────────────
 // 卡號先依照提供的順序對應；key 是沒有讀卡機時用的鍵盤按鍵。
@@ -1700,7 +1704,7 @@ function hostPlaceCard(card){
     offers:{},bidCount:[0,0],lastBidder:null,lastSpeaker:null,exposeDone:false,
     transcript:[],recentAi:[],turn:null,status:'idle',thinker:-1,
     hint:'請面對鏡頭，面試即將開始',userText:'',note:'',deal:null,endReason:'',
-    pendingWarn:null,prefetch:null,introEndEarly:false,
+    pendingWarn:null,prefetch:null,introEndEarly:false,lastAiDoneAt:0,
     aiStreak:0,bidSinceUser:[false,false],listenWin:0,silentCount:0,exposeCount:0,lastExposeAt:0,noIntro:false
   };
   // 新的一場：整份覆寫，清掉上一場的 turnDone 等欄位
@@ -1848,7 +1852,9 @@ async function waitForUser(runId){
     if(H.pendingWarn!=null)return '';
     var now=Date.now();
     var talking=!!SR.interim&&(now-SR.lastActivity<USER_SILENCE_MS);
-    if(SR.pending&&!talking&&now-SR.lastActivity>=USER_SILENCE_MS){var t=SR.pending;SR.pending='';return t;}
+    // 收音正在重新連線時，體驗者可能還在講：多等一下，不要把一句話切成兩段
+    var reconnecting=SR.on&&!SR.running&&now-SR.lastActivity<3500;
+    if(SR.pending&&!talking&&!reconnecting&&now-SR.lastActivity>=USER_SILENCE_MS){var t=SR.pending;SR.pending='';return t;}
     if(SR.pending&&now-start>USER_MAX_TALK_MS){var t2=SR.pending+(SR.interim?'，'+SR.interim:'');SR.pending='';SR.interim='';return t2;}
     if(!SR.pending&&!talking&&now-start>=win)return '';
     if(hostTimeUp()&&!talking)return SR.pending?(function(){var t3=SR.pending;SR.pending='';return t3;})():'';
@@ -2018,8 +2024,9 @@ async function speakTurn(runId,i,res,kind,opts){
   if(canBid&&res.bid&&res.salary>0){
     var amt=clampSalary(res.salary);
     // 加價幅度上限：不會因為體驗者開高價就一口氣翻好幾倍
-    var base=Math.max(H.card.min,(H.offers[i]&&H.offers[i].amount)||0,(H.offers[1-i]&&H.offers[1-i].amount)||0);
-    amt=Math.min(amt,Math.round(base*MAX_RAISE_RATIO/500)*500);
+    var top=Math.max((H.offers[i]&&H.offers[i].amount)||0,(H.offers[1-i]&&H.offers[1-i].amount)||0);
+    var ceil=top?top*MAX_RAISE_RATIO:H.card.min+(H.card.max-H.card.min)*FIRST_BID_POS;
+    amt=Math.min(amt,Math.round(ceil/500)*500);
     if(amt!==Math.round(Number(res.salary)/500)*500){
       // 超出範圍被調整：念出來的金額也要一致
       text=replaceSpokenAmount(text,amt);
@@ -2121,9 +2128,10 @@ async function waitTurnDone(runId,turn,allowDeal){
   var limit=Date.now()+14000+turn.text.length*350;
   while(Date.now()<limit){
     if(!hostAlive(runId,allowDeal))return;
-    if(lastSession&&lastSession.turnDone===turn.id)return;
+    if(lastSession&&lastSession.turnDone===turn.id){if(H)H.lastAiDoneAt=Date.now();return;}
     await sleep(120);
   }
+  if(H)H.lastAiDoneAt=Date.now();
   console.warn('[host] 等待念完逾時，直接進行下一步',turn.id);
 }
 
@@ -2218,7 +2226,7 @@ function buildInstructions(i){
     '2. 體驗者每說一次話，你最多調整出價一次。加價一定要有理由：他剛剛說的話讓你更想要他。',
     '3. 出價時先說出金額，再說為什麼他值這個價、你對他有什麼期待或能給他什麼條件。出價的這句不要問任何問題。說法要有變化、像你這個人會說的話，不要每次都用「我出月薪」開頭。',
     '4. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。salary 要和台詞裡的金額一致，同一句金額只說一次。金額用「4萬2千元」這種說法。',
-    '5. 你的出價可以比對手低，但要說明為什麼。不出價時 bid=false、salary=0。每次加價幅度不要超過目前最高出價的三成，即使體驗者開了很高的價，也要一步一步談。',
+    '5. 你的出價可以比對手低，但要說明為什麼。不出價時 bid=false、salary=0。你們很想搶到人：出價要有誠意，加價不要只加一點點（通常一次加 3 千到 1 萬元，好的表現可以加更多），但每次不超過目前最高出價的四成。',
     '6. 如果體驗者開出期待月薪（反向出價），你要明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false）。他開的金額超過 '+salaryCap(c)+' 元時不能接受，只能還價或拒絕。reverse 分別填 accept／counter／reject，沒有反向出價時填 none。都要等體驗者敲槌才算成交，不要說「成交」。',
     '7. 如果體驗者表示比較相信對手、或質疑你的公司，你要正面回應：反擊對手的說法，或提出具體承諾把他的信任拉回來。',
     '【回傳欄位】',
@@ -2262,7 +2270,7 @@ function buildTask(i,ctx){
           '依你的人格回應他的沉默，並問他一個問題，讓他開口。這次不能出價。';
       }else{
         task='體驗者剛剛用 15 秒做完自我介紹（見對話紀錄最後一行）。這是你在這場面試第一次發言。\n'+follow+planned+
-          '只有當他的話裡出現符合你「核心價值觀」或「你想找的人」的具體事例時，才開一個保守的價格（接近行情下限），說原因和你對他的期待。'+
+          '只有當他的話裡出現符合你「核心價值觀」或「你想找的人」的具體事例時，才開價：開一個有誠意的價格（大約在行情中段，表現特別好可以更高），說原因和你對他的期待。'+
           '「認真、努力、願意學習、願意加班、穩定」這類泛泛的自我評價不算理由。'+
           '如果沒有具體事例，或他說的內容踩到你最討厭的特質，就不要出價，依你的人格直接質疑他或問他一個問題。';
       }
@@ -2625,13 +2633,21 @@ function onFaceResults(results){
 }
 
 // ── 麥克風：開始面試後一直開著（主控電腦）─────────────────
-var SR={rec:null,on:false,introText:'',pending:'',interim:'',lastActivity:0};
-function startRecognition(){
-  if(SR.on)return;
+var SR={rec:null,on:false,running:false,restartTimer:null,introText:'',pending:'',interim:'',lastActivity:0,lastStartAt:0,sessionStartAt:0,restarts:0,lastError:'',log:[]};
+var ECHO_TAIL_MS=2500;        // AI 說完後多久內收到的辨識結果，才需要檢查是不是回音
+function srLog(kind,text){
+  SR.log.push({t:new Date().toLocaleTimeString('zh-TW',{hour12:false}),kind:kind,text:String(text||'').slice(0,60)});
+  if(SR.log.length>14)SR.log.shift();
+  renderMicDebug();
+}
+// 每次都建立新的辨識器：Chrome 重複使用同一個辨識器時，偶爾會重啟失敗、從此收不到聲音
+function createRecognizer(){
   var Rec=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Rec){showNotif('此瀏覽器不支援語音辨識，請用 Chrome；也可以按 T 打字');return;}
-  var r=new Rec();r.lang='zh-TW';r.interimResults=true;r.continuous=true;
+  if(!Rec)return null;
+  var r=new Rec();r.lang='zh-TW';r.interimResults=true;r.continuous=true;r.maxAlternatives=1;
+  r.onstart=function(){if(SR.rec!==r)return;SR.running=true;SR.sessionStartAt=Date.now();};
   r.onresult=function(e){
+    if(SR.rec!==r)return;
     var interim='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var tx=e.results[i][0].transcript;
@@ -2642,20 +2658,63 @@ function startRecognition(){
     if(lastSession)renderSession(lastSession);
   };
   r.onerror=function(e){
-    if(e.error==='not-allowed'||e.error==='service-not-allowed'){showNotif('麥克風權限被拒絕，請允許麥克風；也可以按 T 打字');SR.on=false;}
-    else if(e.error!=='no-speech'&&e.error!=='aborted')console.warn('[SR]',e.error);
+    if(SR.rec!==r)return;
+    SR.lastError=e.error;
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){showNotif('麥克風權限被拒絕，請允許麥克風；也可以按 T 打字');SR.on=false;srLog('錯誤','麥克風權限被拒絕');}
+    else if(e.error==='audio-capture'){showNotif('找不到麥克風，請確認麥克風有接好');srLog('錯誤','找不到麥克風');}
+    else if(e.error!=='no-speech'&&e.error!=='aborted'){console.warn('[SR]',e.error);srLog('錯誤',e.error);}
   };
-  r.onend=function(){if(SR.on&&SR.rec===r){setTimeout(function(){if(SR.on&&SR.rec===r){try{r.start();}catch(err){}}},200);}};
-  SR.rec=r;SR.on=true;
-  try{r.start();}catch(e){console.warn('[SR] start',e);}
+  r.onend=function(){
+    if(SR.rec!==r)return;
+    SR.running=false;
+    // 結束時還有沒定案的字，先收下（Chrome 有時沒給 final 就結束）
+    if(SR.interim){var left=SR.interim;SR.interim='';handleFinalSpeech(left);}
+    if(SR.on)restartRecognition(200);
+  };
+  return r;
+}
+function restartRecognition(delay){
+  if(SR.restartTimer)return; // 同一時間只允許一個重啟，避免同時開兩個辨識器
+  SR.restartTimer=setTimeout(function(){
+    SR.restartTimer=null;
+    if(!SR.on||SR.running)return;
+    var old=SR.rec;
+    var r=createRecognizer();if(!r)return;
+    SR.rec=r; // 先換掉，舊的辨識器之後的事件都會被忽略
+    if(old){try{old.abort();}catch(e){}}
+    SR.lastStartAt=Date.now();SR.restarts++;
+    try{r.start();}catch(e){console.warn('[SR] start',e.message);}
+    renderMicDebug();
+  },delay||0);
+}
+function startRecognition(){
+  if(SR.on)return;
+  if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){showNotif('此瀏覽器不支援語音辨識，請用 Chrome；也可以按 T 打字');return;}
+  SR.on=true;SR.running=false;SR.restarts=0;SR.lastError='';
+  restartRecognition(0);
   updateMicUI();
 }
 function stopRecognition(){
-  SR.on=false;SR.interim='';
+  SR.on=false;SR.interim='';SR.running=false;
+  if(SR.restartTimer){clearTimeout(SR.restartTimer);SR.restartTimer=null;}
   var r=SR.rec;SR.rec=null;
   if(r){try{r.abort();}catch(e){}}
-  updateMicUI();
+  updateMicUI();renderMicDebug();
 }
+// 收音健康檢查：沒在收音就重新開始；連續收音太久（Chrome 約 60 秒會自己斷）且沒人說話時，主動換一個新的
+setInterval(function(){
+  if(!SR.on)return;
+  var now=Date.now();
+  if(!SR.running&&!SR.restartTimer&&now-SR.lastStartAt>1500){
+    var last=SR.log[SR.log.length-1];
+    if(!last||last.text!=='收音中斷，重新開始')srLog('系統','收音中斷，重新開始');
+    restartRecognition(0);return;
+  }
+  if(SR.running&&now-SR.sessionStartAt>50000&&!SR.interim&&now-SR.lastActivity>2000){
+    var r=SR.rec;SR.running=false;
+    try{r.abort();}catch(e){}
+  }
+},1000);
 function updateMicUI(){
   var el=document.getElementById('mic-dot');if(!el)return;
   el.classList.toggle('on',SR.on&&isHost());
@@ -2663,24 +2722,53 @@ function updateMicUI(){
 }
 setInterval(updateMicUI,300);
 
+// 收音診斷面板（主控電腦按 D 開關）
+var micDebugOn=false;
+function renderMicDebug(){
+  var el=document.getElementById('mic-debug');if(!el)return;
+  el.classList.toggle('on',micDebugOn);
+  if(!micDebugOn)return;
+  var st=!SR.on?'未啟動':(SR.running?'收音中':'重新連線中');
+  el.textContent='麥克風：'+st+'　重啟 '+SR.restarts+' 次'+(SR.lastError?'　最後錯誤：'+SR.lastError:'')+'\n'+
+    (SR.interim?'聽到中：'+SR.interim+'\n':'')+
+    SR.log.map(function(x){return x.t+'  '+x.kind+'：'+x.text;}).join('\n');
+}
+
 function normForEcho(s){return String(s||'').replace(/[\s，。！？、,.!?:：；;「」"'（）()…—\-]/g,'');}
-// 麥克風會收到兩台電腦喇叭念出的 AI 台詞。辨識結果如果大部分字詞都出現在
-// 最近的 AI 台詞裡，就當成回音丟掉，不算體驗者說的話。
-function isEcho(tx){
-  if(!H||!H.recentAi.length)return false;
-  var a=normForEcho(tx);if(a.length<2)return true;
-  var ai=normForEcho(H.recentAi.join(''));
-  if(a.length<=4)return ai.indexOf(a)>=0;
+// 麥克風會收到喇叭念出的 AI 台詞。只有在 AI 正在說話、或剛說完 2.5 秒內收到的辨識結果，
+// 才和「正在說的那一句」比對：大部分內容都出現在那句台詞裡，才當成回音丟掉。
+// AI 沒在說話時，體驗者說的話一律收下。
+function aiAudioActive(){
+  if(!H)return false;
+  if(H.status==='speaking')return true;
+  return !!(H.lastAiDoneAt&&Date.now()-H.lastAiDoneAt<ECHO_TAIL_MS);
+}
+function echoReason(tx){
+  if(!aiAudioActive())return '';
+  var ref=normForEcho(H.turn&&H.turn.text);
+  var a=normForEcho(tx);
+  if(!ref)return '';
+  if(a.length<2)return (H.status==='speaking')?'AI 說話時的雜音':'';
+  if(ref.indexOf(a)>=0)return '和 AI 台詞相同';
+  if(a.length<4)return '';
   var hit=0,total=0;
-  for(var i=0;i<a.length-1;i++){total++;if(ai.indexOf(a.substr(i,2))>=0)hit++;}
-  return total>0&&hit/total>=0.6;
+  for(var i=0;i<a.length-1;i++){total++;if(ref.indexOf(a.substr(i,2))>=0)hit++;}
+  return (total>0&&hit/total>=0.7)?'和 AI 台詞高度重疊':'';
+}
+function isEcho(tx){return !!echoReason(tx);}
+function joinSpeech(a,b){
+  a=String(a||'').replace(/[，。,\s]+$/,'');b=String(b||'').trim();
+  if(!a)return b;if(!b)return a;
+  return a+'，'+b.replace(/^[，。,\s]+/,'');
 }
 function handleFinalSpeech(tx){
   tx=String(tx||'').trim();if(!tx||!H)return;
-  if(H.phase==='intro'){SR.introText+=(SR.introText?'，':'')+tx;return;}
+  if(H.phase==='intro'){SR.introText=joinSpeech(SR.introText,tx);srLog('自介',tx);return;}
   if(H.phase==='open'){
-    if(isEcho(tx)){console.log('[SR] 回音，略過：',tx);return;}
-    SR.pending+=(SR.pending?'，':'')+tx;
+    var why=echoReason(tx);
+    if(why){console.log('[SR] 回音，略過：',tx,why);srLog('略過（'+why+'）',tx);return;}
+    SR.pending=joinSpeech(SR.pending,tx);
+    srLog('收到',tx);
     return;
   }
   // round1（第一輪不插話）、deal、ended：不處理
@@ -2712,6 +2800,7 @@ document.addEventListener('keydown',function(e){
   if(k==='b'||k==='B'){hostHammer(1);return;}
   if(k==='r'||k==='R'){hostReset('reset');return;}
   if(k==='h'||k==='H'){document.getElementById('key-legend').classList.toggle('on');return;}
+  if(k==='d'||k==='D'){micDebugOn=!micDebugOn;renderMicDebug();return;}
   if(k==='t'||k==='T'){
     e.preventDefault();
     var txt=window.prompt('輸入體驗者要說的話：');

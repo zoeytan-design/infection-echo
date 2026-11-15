@@ -1032,7 +1032,19 @@ var spokenTurnId=null;      // 這台電腦已經播過的發言 id
 var playingTurnId=null;     // 這台電腦正在播的發言 id
 
 function nowSrv(){return Date.now()+serverOffset;}
-function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+// 等待改用 Web Worker 計時：頁面被切到背景或視窗被遮住時，瀏覽器會大幅降低一般計時器的頻率，
+// 但不會這樣限制 Worker，主控流程才不會卡住。
+var sleepWorker=null,sleepSeq=0,sleepWaiters={};
+try{
+  sleepWorker=new Worker(URL.createObjectURL(new Blob(["onmessage=function(e){setTimeout(function(){postMessage(e.data.id);},e.data.ms);};"],{type:'text/javascript'})));
+  sleepWorker.onmessage=function(e){var f=sleepWaiters[e.data];if(f){delete sleepWaiters[e.data];f();}};
+}catch(e){sleepWorker=null;}
+function sleep(ms){
+  return new Promise(function(r){
+    if(!sleepWorker){setTimeout(r,ms);return;}
+    var id=++sleepSeq;sleepWaiters[id]=r;sleepWorker.postMessage({id:id,ms:ms});
+  });
+}
 function fmtNT(n){return 'NT$'+Number(n).toLocaleString('en-US');}
 function fmtWan(n){ // 45000 → 4.5 萬
   var w=n/10000;return (Math.round(w*10)/10)+' 萬';
@@ -1387,7 +1399,7 @@ function fallbackSpeak(text,onDone,speakToken){
   u.onend=finish;
   u.onerror=finish;
   // 瀏覽器內建語音有時不會觸發 onend（例如沒有中文語音或被擋），時間到就當作念完
-  setTimeout(finish,2500+String(text).length*350);
+  sleep(2500+String(text).length*350).then(finish);
   try{speechSynthesis.speak(u);}catch(e){finish();}
 }
 async function testElevenLabs(){
@@ -2505,11 +2517,11 @@ function handleSpeaking(s){
   }
   elevenSpeak(t.text,v.name||'',v.rate||1.0,v.stability!=null?v.stability:0.5,v.similarity||0.75,done);
   // 保險：語音下載或播放卡住時，不讓整場面試停住
-  setTimeout(function(){
+  sleep(9000+String(t.text).length*300).then(function(){
     if(reported||playingTurnId!==t.id)return;
     console.warn('[speak] 播放逾時，略過這句的語音',t.id);
     stopSpeaking();done();
-  },9000+String(t.text).length*300);
+  });
 }
 
 function stopSpeaking(){

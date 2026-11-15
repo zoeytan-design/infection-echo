@@ -1769,7 +1769,9 @@ async function hostLoop(runId){
     // 隨機爆料（兩位都開過價後才可能發生，一場最多兩次）
     if(exposeEligible()&&Math.random()<EXPOSE_CHANCE){
       H.prefetch=null;H.exposeCount++;H.lastExposeAt=Date.now();
-      var att=Math.random()<0.5?0:1;
+      // 第一次隨機由誰爆料；第二次換被爆料的那一方反咬回去
+      var att=(H.lastExposer==null)?(Math.random()<0.5?0:1):1-H.lastExposer;
+      H.lastExposer=att;
       H.status='thinking';H.thinker=att;hostPublish();
       var r1=await genSafe(att,{kind:'expose'});
       var p2=null;

@@ -1757,7 +1757,7 @@ async function hostLoop(runId){
       H.prefetch=null;
       H.transcript.push({who:'user',text:userText,kind:'user'});
       H.userText=userText;H.userAt=nowSrv();
-      H.aiStreak=0;H.silentCount=0;H.bidSinceUser=[false,false];
+      H.aiStreak=0;H.silentCount=0;H.bidSinceUser=[false,false];H.openUserTurns=(H.openUserTurns||0)+1;
       await respondUser(runId,userText);
       continue;
     }
@@ -1815,7 +1815,7 @@ async function hostLoop(runId){
   }
 }
 function exposeEligible(){
-  return H.offers[0]&&H.offers[1]&&H.exposeCount<EXPOSE_MAX&&(!H.lastExposeAt||Date.now()-H.lastExposeAt>EXPOSE_GAP_MS)&&
+  return H.openUserTurns>0&&H.offers[0]&&H.offers[1]&&H.exposeCount<EXPOSE_MAX&&(!H.lastExposeAt||Date.now()-H.lastExposeAt>EXPOSE_GAP_MS)&&
     H.turn&&H.turn.kind!=='expose_reply';
 }
 
@@ -1968,11 +1968,18 @@ async function speakTurn(runId,i,res,kind,opts){
       H.bidCount[i]=(H.bidCount[i]||0)+1;
       H.bidSinceUser[i]=true;
       H.lastBidder=i;offer=amt;
-      if(!hasSpokenAmount(text))text='我出月薪'+fmtSpoken(amt)+'。'+text; // 規則：有出價一定先講價錢
+      if(!hasSpokenAmount(text))text=fmtSpoken(amt)+'。'+text; // 規則：有出價一定先講價錢
     }
   }
+  // 規則：出價的這句只講金額、原因和期待，不追問問題（問題留給下一句或另一位）
+  if(offer){
+    var sents=text.match(/[^。！？!?]+[。！？!?]?/g)||[text];
+    var kept=sents.filter(function(x){return !/[？?]\s*$/.test(x);});
+    if(!kept.length)kept=[sents[0].replace(/[？?]\s*$/,'。')];
+    text=kept.join('').trim();
+  }
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
-  var askUser=mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text);
+  var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
   if(kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
   var turn={id:randId('t'),at:nowSrv(),speaker:i,text:text,offer:offer,lower:lower,kind:kind,reverse:(res&&res.reverse)||'none',askUser:askUser};
   H.turn=turn;H.lastSpeaker=i;H.status='speaking';
@@ -2103,7 +2110,7 @@ function buildInstructions(i){
     '【出價規則】',
     '1. 只有在體驗者說了話之後，你才可以出價或加價；體驗者沒說話時，價錢一律不動（這種情況系統會告訴你不能出價）。',
     '2. 體驗者每說一次話，你最多調整出價一次。加價一定要有理由：他剛剛說的話讓你更想要他。',
-    '3. 出價時先說出金額，再說為什麼他值這個價、你對他有什麼期待或能給他什麼條件。這句不要再追問問題。',
+    '3. 出價時先說出金額，再說為什麼他值這個價、你對他有什麼期待或能給他什麼條件。出價的這句不要問任何問題。說法要有變化、像你這個人會說的話，不要每次都用「我出月薪」開頭。',
     '4. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。salary 要和台詞裡的金額一致，同一句金額只說一次。金額用「4萬2千元」這種說法。',
     '5. 你的出價可以比對手低，但要說明為什麼。不出價時 bid=false、salary=0。',
     '6. 如果體驗者開出期待月薪（反向出價），你要明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false）。reverse 分別填 accept／counter／reject，沒有反向出價時填 none。都要等體驗者敲槌才算成交，不要說「成交」。',

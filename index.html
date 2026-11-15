@@ -2270,7 +2270,7 @@ function buildTask(i,ctx){
       task='體驗者還沒說話。請接'+op.name+'剛剛那句話：反駁、補充或評論，也可以直接問體驗者一個問題。不能出價。';
       break;
     case 'handoff':
-      task='你們兩位已經連續講了兩句，體驗者都還沒說話。請先簡短接住'+op.name+'的話，然後把話交給體驗者：依你的人格問他一個問題，讓他有機會回答。不能出價。askUser=true。';
+      task='你們兩位已經連續講了兩句，體驗者都還沒說話。請先簡短接住'+op.name+'的話，然後把話交給體驗者：依你的人格問體驗者一個問題（用「你」稱呼體驗者，不要問'+op.name+'），讓他有機會回答。不能出價。askUser=true。';
       break;
     case 'silence':
       task='剛剛的問題，體驗者過了好幾秒都沒有回答。依你的人格回應他的沉默（例如問他為什麼不回答、是不是答不出來、或換個方式再問一次），讓他開口。不能出價。askUser=true。';
@@ -2334,6 +2334,30 @@ function extractOpenAIText(data){
   return '';
 }
 
+// 該把話交給體驗者的句子，問題卻是問對手時，請 AI 改寫成問體驗者
+async function rewriteAskUser(i,line){
+  var op=getRole(1-i);
+  var idToken=await getAuthToken();
+  var body=JSON.stringify({
+    model:OPENAI_MODEL,
+    input:[
+      {role:'developer',content:[{type:'input_text',text:'你是'+getRole(i).name+'，正在面試一位應徵者（體驗者）。下面這句台詞最後的問題是在問「'+op.name+'」，請改寫成：前半可以保留對'+op.name+'的回應，但最後的問題一定要直接問體驗者（用「你」稱呼體驗者），不要再問'+op.name+'。語氣和人格不變，1～2 句、40 字以內，台灣繁體中文。只輸出改寫後的台詞。'}]},
+      {role:'user',content:[{type:'input_text',text:line}]}
+    ],
+    temperature:0.4,max_output_tokens:120
+  });
+  var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:body});
+  if(!resp.ok)throw new Error('HTTP '+resp.status);
+  var t=extractOpenAIText(await resp.json());
+  return toTaiwanTerms(String(t||'').trim().replace(/^["「]|["」]$/g,''));
+}
+function questionTargetsRival(i,text){
+  var op=getRole(1-i),given=op.name.slice(1);
+  var parts=String(text).match(/[^。！？!?]+[。！？!?]?/g)||[text];
+  var q=parts.filter(function(x){return /[？?]\s*$/.test(x);}).pop();
+  if(!q)return false;
+  return q.indexOf(op.name)>=0||q.indexOf(given)>=0;
+}
 async function rewriteWithoutQuestion(i,line,amount){
   var idToken=await getAuthToken();
   var body=JSON.stringify({
@@ -2390,6 +2414,13 @@ async function generateLine(i,ctx){
     parsed.salary=parseInt(parsed.salary,10)||0;
     if(['round1','user'].indexOf(ctx.kind)<0||(ctx.kind==='round1'&&H.noIntro)){parsed.bid=false;parsed.salary=0;}
     parsed.wantToSpeak=Math.max(0,Math.min(10,parseInt(parsed.wantToSpeak,10)||0));
+    // 該把話交給體驗者的句子，問題卻是問對手 → 改寫成問體驗者
+    if(['handoff','silence','banter_end','expose_reply'].indexOf(ctx.kind)>=0&&questionTargetsRival(i,parsed.spokenText)){
+      try{
+        var fx=await rewriteAskUser(i,parsed.spokenText);
+        if(fx&&/[？?]/.test(fx)&&!questionTargetsRival(i,fx))parsed.spokenText=fx;
+      }catch(e){console.warn('[AI] 改寫失敗',e.message);}
+    }
     // 出價的這句不能有問句：有的話請 AI 改寫一次（保留金額、原因與期待）
     if(parsed.bid&&parsed.salary>0&&(/[？?]/.test(parsed.spokenText)||!findSpokenAmounts(parsed.spokenText).length)){
       try{

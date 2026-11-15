@@ -948,7 +948,8 @@ var EXPOSE_CHANCE=0.35;       // 每次符合條件時觸發爆料的機率
 var EXPOSE_GAP_MS=25000;      // 兩次爆料至少間隔多久
 var SALARY_CAP_RATIO=1.3;     // 出價上限 = 職缺行情上限 × 這個倍數
 var MAX_RAISE_RATIO=1.4;      // 每次出價最多比目前雙方最高出價多幾成
-var FIRST_BID_POS=0.7;        // 第一次開價最高到行情範圍的哪個位置（0＝下限，1＝上限）
+var FIRST_BID_POS=0.7;
+var MIN_RAISE=1000;           // 新出價至少比目前雙方最高出價多這麼多（價格只會往上）        // 第一次開價最高到行情範圍的哪個位置（0＝下限，1＝上限）
 
 // ── 職業卡（RFID 卡號 → 職缺）──────────────────────────
 // 卡號先依照提供的順序對應；key 是沒有讀卡機時用的鍵盤按鍵。
@@ -2021,12 +2022,25 @@ async function speakTurn(runId,i,res,kind,opts){
   var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary,H.offers[1-i]?H.offers[1-i].amount:0):0;
   if(canBid&&spokenAmt&&/^[^，。！？]{0,6}?我[^，。！？]{0,4}?(出|給|開|加|提高)/.test(text)){res.bid=true;res.salary=spokenAmt;}
   else if(canBid&&res.bid&&spokenAmt&&spokenAmt!==res.salary){res.salary=spokenAmt;}
+  var amt=0;
   if(canBid&&res.bid&&res.salary>0){
-    var amt=clampSalary(res.salary);
+    amt=clampSalary(res.salary);
     // 加價幅度上限：不會因為體驗者開高價就一口氣翻好幾倍
     var top=Math.max((H.offers[i]&&H.offers[i].amount)||0,(H.offers[1-i]&&H.offers[1-i].amount)||0);
     var ceil=top?top*MAX_RAISE_RATIO:H.card.min+(H.card.max-H.card.min)*FIRST_BID_POS;
     amt=Math.min(amt,Math.round(ceil/500)*500);
+    // 價格只會往上：新出價一定高於目前雙方最高出價
+    if(top&&amt<top+MIN_RAISE)amt=Math.min(top+MIN_RAISE,salaryCap(H.card));
+    if(top&&amt<=top){
+      // 已經到上限、沒辦法再加：這句不算出價，拿掉台詞裡開價的句子
+      console.warn('[host] 已達上限，無法再加價：',text);
+      res.bid=false;amt=0;if(res.reverse&&res.reverse!=='none')res.reverse='reject';
+      var ps=text.match(/[^。！？!?]+[。！？!?]?/g)||[text];
+      var kp=ps.filter(function(x){return !findSpokenAmounts(x).length;});
+      text=kp.join('').trim()||'這已經是我能給的最高價了，你自己想清楚。';
+    }
+  }
+  if(canBid&&res.bid&&res.salary>0&&amt){
     if(amt!==Math.round(Number(res.salary)/500)*500){
       // 超出範圍被調整：念出來的金額也要一致
       text=replaceSpokenAmount(text,amt);
@@ -2226,7 +2240,7 @@ function buildInstructions(i){
     '2. 體驗者每說一次話，你最多調整出價一次。加價一定要有理由：他剛剛說的話讓你更想要他。',
     '3. 出價時先說出金額，再說為什麼他值這個價、你對他有什麼期待或能給他什麼條件。出價的這句不要問任何問題。說法要有變化、像你這個人會說的話，不要每次都用「我出月薪」開頭。',
     '4. 出價單位是新台幣月薪（元），不得低於 '+c.min+' 元，最高不超過 '+salaryCap(c)+' 元（可以略高於行情上限，但不要太誇張）。salary 要和台詞裡的金額一致，同一句金額只說一次。金額用「4萬2千元」這種說法。',
-    '5. 你的出價可以比對手低，但要說明為什麼。不出價時 bid=false、salary=0。你們很想搶到人：出價要有誠意，加價不要只加一點點（通常一次加 3 千到 1 萬元，好的表現可以加更多），但每次不超過目前最高出價的四成。',
+    '5. 價格只會往上：你的新出價一定要高於目前雙方的最高出價（至少多 1 千元），不能比之前任何一次出價低。不出價時 bid=false、salary=0。你們很想搶到人：出價要有誠意，加價不要只加一點點（通常一次加 3 千到 1 萬元，好的表現可以加更多），但每次不超過目前最高出價的四成。',
     '6. 如果體驗者開出期待月薪（反向出價），你要明確回應：接受（bid=true，salary 等於他開的金額）、還價（bid=true，salary 是你能接受的金額並說明原因）、或拒絕（bid=false）。他開的金額超過 '+salaryCap(c)+' 元時不能接受，只能還價或拒絕。reverse 分別填 accept／counter／reject，沒有反向出價時填 none。都要等體驗者敲槌才算成交，不要說「成交」。',
     '7. 如果體驗者表示比較相信對手、或質疑你的公司，你要正面回應：反擊對手的說法，或提出具體承諾把他的信任拉回來。',
     '【回傳欄位】',
@@ -2251,6 +2265,7 @@ function buildTask(i,ctx){
     '【目前狀況】',
     '- 你的目前出價：'+offerText(i),
     '- 對手（'+op.name+'）的目前出價：'+offerText(1-i),
+    '- 目前最高出價：'+(Math.max((H.offers[0]&&H.offers[0].amount)||0,(H.offers[1]&&H.offers[1].amount)||0)?fmtSpoken(Math.max((H.offers[0]&&H.offers[0].amount)||0,(H.offers[1]&&H.offers[1].amount)||0))+'，要出價就必須高於這個金額':'還沒有人出價'),
     '- 最後一位出價的是：'+(H.lastBidder==null?'還沒有人出價':getRole(H.lastBidder).name),
     '- 面試剩餘時間：約 '+left+' 秒',
     '- 這次'+(canBidNow?'可以':'不可以')+'出價'+(canBidNow?'':'（bid=false，salary=0，台詞裡也不要開新的價錢）')+'。',

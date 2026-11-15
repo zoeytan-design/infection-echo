@@ -2061,7 +2061,24 @@ async function speakTurn(runId,i,res,kind,opts){
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
   if(kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
   var rev=(res&&res.reverse)||'none';
-  if(kind==='user'&&opts.userAsk&&rev==='none'&&offer)rev=(offer>=opts.userAsk)?'accept':'counter';
+  // 體驗者開了期待月薪：台詞一定要明確回應那個金額（AI 沒提到就由程式補上）
+  if(kind==='user'&&opts.userAsk){
+    var ask=opts.userAsk;
+    var mentionsAsk=findSpokenAmountsAll(text).some(function(a){return a.v===ask;});
+    if(offer){
+      rev=(offer>=ask)?'accept':'counter';
+      if(!mentionsAsk){
+        var rest=text;
+        var lead=findSpokenAmounts(text);
+        if(lead.length&&lead[0].pos<=2){var cut=text.search(/[，。！!,]/);rest=cut>=0?text.slice(cut+1):'';}
+        rest=rest.replace(/^[，。\s]+/,'');
+        text='你開'+fmtSpoken(ask)+'，'+(offer>=ask?(offer===ask?'我接受':'我給你'+fmtSpoken(offer)):'我給'+fmtSpoken(offer))+(rest?'，'+rest:'。');
+      }
+    }else if(!mentionsAsk){
+      if(rev==='none')rev='reject';
+      text='你開'+fmtSpoken(ask)+'，我還不能給你這個數字。'+text;
+    }
+  }
   var turn={id:randId('t'),at:nowSrv(),speaker:i,text:text,offer:offer,lower:lower,kind:kind,reverse:rev,askUser:askUser};
   H.turn=turn;H.lastSpeaker=i;H.status='speaking';
   H.aiStreak=askUser?0:(H.aiStreak||0)+1;

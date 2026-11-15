@@ -2064,7 +2064,7 @@ async function speakTurn(runId,i,res,kind,opts){
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
   if(kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
-  var rev=(res&&res.reverse)||'none';
+  var rev=(kind==='user'&&res&&res.reverse)||'none'; // 只有回應體驗者的那句才算接受／還價／拒絕
   // 體驗者開了期待月薪：台詞一定要明確回應那個金額（AI 沒提到就由程式補上）
   if(kind==='user'&&opts.userAsk){
     var ask=opts.userAsk;

@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
 <style>
@@ -183,6 +184,46 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 .mic-debug{position:absolute;left:12px;top:15%;z-index:30;max-width:46%;margin:0;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,0.82);color:#b8ffef;font:11px/1.55 var(--mono);white-space:pre-wrap;display:none;}
 .mic-debug.on{display:block;}
 </style>
+<style>
+/* ── 收據 ── */
+#receipt-overlay{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.82);overflow:hidden;}
+#receipt-overlay.hidden{display:none;}
+#receipt-overlay .rc-side{position:absolute;top:0;bottom:0;width:10%;background:#000;z-index:2;}
+#receipt-overlay .rc-side.l{left:0;} #receipt-overlay .rc-side.r{right:0;}
+#receipt-paper{position:absolute;left:50%;top:0;width:600px;box-sizing:border-box;padding:46px 40px 60px;background:#fbfaf6;color:#1a1a1a;
+  transform-origin:top center;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:19px;line-height:1.5;}
+#receipt-paper .mono,#receipt-paper .rc-v{font-family:"Courier New","Noto Sans Mono",monospace;}
+.rc-head{text-align:center;}
+.rc-title{font-family:"Noto Serif TC","PMingLiU",serif;font-size:36px;font-weight:900;letter-spacing:6px;}
+.rc-en{font-family:"Courier New",monospace;font-size:14px;letter-spacing:7px;color:#888;margin-top:8px;}
+.rc-sub{font-size:17px;color:#555;margin-top:6px;}
+.rc-hr{border-top:3px dashed #9a9a9a;margin:22px 0;}
+.rc-row{display:flex;align-items:baseline;gap:10px;margin:10px 0;}
+.rc-k{white-space:nowrap;font-size:20px;}
+.rc-dots{flex:1;border-bottom:2px dotted #b5b5b5;transform:translateY(-5px);}
+.rc-v{white-space:nowrap;font-weight:700;font-size:19px;}
+.rc-row.bold .rc-v{font-weight:800;}
+.rc-row.item{margin-top:18px;}
+.rc-sc{font-family:"Courier New",monospace;}
+.rc-row.final .rc-v{font-family:"Noto Sans TC","PingFang TC",sans-serif;font-size:32px;font-weight:900;}
+.rc-sec{text-align:center;font-size:20px;font-weight:700;margin:6px 0 4px;}
+.rc-sec.left{text-align:left;}
+.rc-radar{display:block;width:100%;margin:6px auto 0;}
+.rc-rl{font-size:19px;font-weight:700;fill:#222;}
+.rc-rv{font-size:15px;fill:#999;font-family:"Courier New",monospace;}
+.rc-quote{border-left:3px solid #bbb;padding:2px 0 2px 16px;margin:6px 0 0 12px;color:#444;font-size:19px;}
+.rc-kw{color:#666;font-size:17px;margin:8px 0 0 12px;}
+.rc-note{color:#777;font-size:17px;margin-top:22px;}
+.rc-k2{font-size:21px;font-weight:700;}
+.rc-winner{font-size:38px;font-weight:900;margin:10px 0 14px;}
+.rc-explain{color:#777;font-size:17px;line-height:1.65;}
+.rc-stamp{display:block;width:max-content;margin:34px auto 26px;padding:6px 34px;border:5px solid #c62828;color:#c62828;font-size:40px;font-weight:900;letter-spacing:8px;transform:rotate(-6deg);}
+.rc-stamp.ok{border-color:#1b7f3b;color:#1b7f3b;}
+.rc-qr{width:250px;margin:16px auto 6px;border:2px solid #ddd;padding:6px;background:#fff;}
+.rc-qr svg{display:block;width:100%;height:auto;}
+.rc-qrcap{text-align:center;color:#666;font-size:17px;}
+.rc-thanks{text-align:center;color:#555;font-size:18px;margin-top:70px;}
+</style>
 </head>
 <body>
 <div class="scanline"></div>
@@ -272,6 +313,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
 </div>
 
 
+<div id="receipt-overlay" class="hidden"><div class="rc-side l"></div><div class="rc-side r"></div><div id="receipt-paper"></div></div>
 <script type="importmap">
 {
   "imports": {
@@ -1679,7 +1721,7 @@ function hostData(){
     lastBidder:(H.lastBidder==null?-1:H.lastBidder),
     status:H.status,thinker:(H.thinker==null?-1:H.thinker),
     turn:H.turn||null,hint:H.hint||'',userText:H.userText||'',userAt:H.userAt||0,askUser:!!(H.turn&&H.turn.askUser),listenWin:H.listenWin||0,note:H.note||'',
-    deal:H.deal||null,endReason:H.endReason||'',updatedAt:nowSrv()
+    deal:H.deal||null,endReason:H.endReason||'',receipt:H.receipt||null,updatedAt:nowSrv()
   };
   return data;
 }
@@ -1700,7 +1742,8 @@ function hostReset(reason){
 
 function hostPlaceCard(card){
   if(!card)return;
-  if(H&&H.card&&H.card.key===card.key&&H.phase!=='ended')return; // 同一張卡重複感應
+  if(H&&(H.phase==='deal'||H.phase==='ended'||H.phase==='receipt')){showNotif('收據顯示中，結束後才能放下一張卡');return;}
+  if(H&&H.card&&H.card.key===card.key)return; // 同一張卡重複感應
   stopRecognition();
   H={
     id:randId('s'),phase:'ready',card:card,startedAt:0,deadline:0,introEndsAt:0,
@@ -1716,6 +1759,8 @@ function hostPlaceCard(card){
 }
 function hostRemoveCard(){
   if(!H)return;
+  // 已經成交或時間到：結果已定，拿起卡片不影響收據（收據 1 分鐘後自動重新開始）
+  if(H.phase==='deal'||H.phase==='ended'||H.phase==='receipt')return;
   hostReset('card_removed');
 }
 
@@ -2179,24 +2224,28 @@ async function hostDeal(i){
   H.deal={with:i,amount:H.offers[i].amount,name:getRole(i).name};
   H.status='thinking';H.thinker=i;H.hint='成交！';H.note='';
   SR.pending='';
+  startReceipt(); // 收尾台詞講的同時，在背景替收據評分
   await hostPublish(); // 狀態一改，所有電腦會立刻停止正在念的台詞
   var rw=await genSafe(i,{kind:'deal_win'});
   var pl=null;
   var ok=await speakTurn(runId,i,rw,'deal_win',{allowDeal:true,nextThinker:1-i,onStart:function(){pl=genSafe(1-i,{kind:'deal_lose'});}});
   if(ok&&pl){var rl=await pl;await speakTurn(runId,1-i,rl,'deal_lose',{allowDeal:true});}
+  stopRecognition();
   if(H&&H.id===runId){
     H.phase='ended';H.endReason='deal';H.status='ended';H.thinker=-1;
-    H.hint='面試結束 ・ 拿起職業卡（或按 0）即可重新開始';
+    H.hint='面試結束 ・ 正在產生收據';
     await hostPublish();
+    await showReceiptWhenReady(runId);
   }
-  stopRecognition();
 }
 async function hostEnd(runId,reason){
   if(!H||H.id!==runId)return;
+  if(H.phase==='ended'||H.phase==='receipt')return;
   H.phase='ended';H.endReason=reason;H.status='ended';H.thinker=-1;H.prefetch=null;
-  H.hint='面試結束 ・ 拿起職業卡（或按 0）即可重新開始';
+  H.hint='面試結束 ・ 正在產生收據';
   stopRecognition();
   await hostPublish();
+  await showReceiptWhenReady(runId);
 }
 // 保險：時間到了但台詞拖太久，超過 15 秒就強制結束
 setInterval(function(){
@@ -2484,6 +2533,7 @@ var lastFlashTurnId=null,flashTimer=null;
 function onSessionUpdate(s){
   lastSession=s;
   renderSession(s);
+  renderReceipt(s);
   handleSpeaking(s);
 }
 
@@ -2524,9 +2574,9 @@ function renderSession(s){
     setCenter('請放上職業卡',why+'選一個你想應徵的職位'+hostHint);
   }else if(phase==='ready'){
     setCenter('應徵：'+(c?c.title:''),'請面對鏡頭，面試即將開始');
-  }else if(phase==='ended'){
-    if(s.endReason==='deal'&&s.deal)setCenter('成交！','與 '+s.deal.name+' 的企業成交\n月薪 '+fmtNT(s.deal.amount),'deal');
-    else setCenter('面試時間到','本次面試沒有成交\n拿起職業卡即可重新開始');
+  }else if((phase==='ended'||phase==='receipt')){
+    if(s.endReason==='deal'&&s.deal)setCenter('成交！','與 '+s.deal.name+' 的企業成交\n月薪 '+fmtNT(s.deal.amount)+(phase==='ended'?'\n正在產生收據…':''),'deal');
+    else setCenter('面試時間到','本次面試沒有成交\n正在產生收據…');
   }else{
     setCenter('');
   }
@@ -2543,7 +2593,7 @@ function renderSession(s){
     dlg={show:true,who:whoOf(t.speaker),cls:t.speaker===0?'a':'b',state:'',text:t.text};
   }else if(phase==='intro'){
     dlg={show:true,who:'你',cls:'user',state:'自我介紹中',text:liveUser||(isHost()&&SR.introText)||('請說明你為什麼想應徵「'+(c?c.title:'')+'」'),dim:!(liveUser||(isHost()&&SR.introText))};
-  }else if(phase==='round1'||phase==='open'||phase==='deal'||phase==='ended'){
+  }else if(phase==='round1'||phase==='open'||phase==='deal'||phase==='ended'||phase==='receipt'){
     if(liveUser){
       dlg={show:true,who:'你',cls:'user',state:'說話中',text:liveUser};
     }else if(s.status==='speaking'&&t){
@@ -2582,7 +2632,7 @@ function renderSession(s){
     set3DListeningFrom('user');
   }else if(s.status==='speaking'&&t){
     set3DListeningFrom(t.speaker);
-  }else if(phase==='ended'){
+  }else if((phase==='ended'||phase==='receipt')){
     if(playingTurnId===null)set3DState('idle');
   }else{
     if(playingTurnId===null)set3DListeningFrom('user');
@@ -2606,7 +2656,7 @@ function tickTimer(){
   if(!s||!s.deadline||s.phase==='idle'||s.phase==='ready'){el.textContent='--:--';el.classList.remove('low');return;}
   var ref=s.phase==='intro'?s.introEndsAt:s.deadline;
   var left=Math.max(0,Math.ceil((ref-nowSrv())/1000));
-  if(s.phase==='ended'||s.phase==='deal')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
+  if(s.phase==='ended'||s.phase==='receipt'||s.phase==='deal')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
   if(s.phase==='intro'&&!s.introEndsAt){el.textContent=Math.round(INTRO_MS/1000)+'s';el.classList.remove('low');}
   else if(s.phase==='intro'){el.textContent=left+'s';el.classList.toggle('low',left<=5);}
   else{el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);el.classList.toggle('low',left<=30&&s.phase!=='ended');}
@@ -2835,8 +2885,240 @@ document.addEventListener('keydown',function(e){
   }
 });
 
+// ════════════════════════════════════════════════════════
+//  收據：成交或時間到 → AI 評分 → 兩台螢幕顯示收據 1 分鐘 → 自動重新開始
+//  （中途拿走卡片不會有收據）
+// ════════════════════════════════════════════════════════
+var RECEIPT_SHOW_MS=60000;     // 收據顯示多久後自動重新開始
+var RECEIPT_SCROLL_DELAY=2500; // 收據出現後停幾秒才開始往下捲
+var RECEIPT_SCROLL_MS=42000;   // 從頂端捲到底部花多久（剩下的時間停在底部）
+var RECEIPT_SIDE_MARGIN=0.10;  // 左右黑邊各占螢幕寬度的比例
+var PASS_LINE=3;               // 及格線（分）
+var PER_POINT=1000;            // 超過及格線後每分加價
+var ADMIT_AVG=3.5,ADMIT_MAX=6; // 收據上印的錄取條件
+var DIMS=[
+  {radar:'專業技能',label:'專業技能',hint:'和這個職位直接相關的專業能力、工具、作品'},
+  {radar:'產業經驗',label:'產業與相關經驗',hint:'實際工作、專案、實習或相關產業的經歷'},
+  {radar:'軟實力',label:'軟實力與溝通協作',hint:'溝通、表達、團隊合作、與人協調'},
+  {radar:'抗壓解題',label:'問題解決與抗壓性',hint:'遇到困難、壓力、突發狀況時怎麼處理'},
+  {radar:'文化契合',label:'文化與價值觀契合',hint:'熱忱、學習意願、價值觀、對工作的態度'}
+];
+// 面向權重：同樣多 1 分，在這個職缺值多少錢（1＝標準）。順序同 DIMS
+var DIM_WEIGHTS={
+  '1':[1.2,0.8,1.0,0.8,0.8], // 平面設計師
+  '2':[1.2,0.8,0.8,1.0,0.8], // 動畫師
+  '3':[1.2,1.0,0.8,1.0,0.8], // 網頁設計師
+  '4':[1.0,1.2,1.2,0.8,1.0], // 品牌策略與定位設計
+  '5':[1.2,0.8,1.0,1.0,0.8]  // 遊戲設計師
+};
+var RECEIPT_PATH='receipts';
+
+function pad2(n){return ('0'+n).slice(-2);}
+function fmtScore(n){n=Math.round(Number(n||0)*10)/10;return (n%1===0)?String(n):n.toFixed(1);}
+function fmtNTs(n){return 'NT$ '+Number(n).toLocaleString('en-US');}
+function roleShort(i){var t=getRole(i).title||'';var m=t.match(/（([^）]+)）/);return getRole(i).name+'（'+(m?m[1]:t)+'）';}
+
+function userLines(){
+  return H.transcript.filter(function(t){return t.who==='user'&&t.text&&!/^（/.test(t.text);}).map(function(t){return t.text;});
+}
+
+// 請 AI 依體驗者說過的話，替五個面向打分、挑出原話、列出關鍵字
+async function scoreDims(card,lines){
+  var empty=DIMS.map(function(){return {score:1,quotes:[],keywords:[]};});
+  if(!lines.length||!workerReady())return empty;
+  var all=lines.join('\n');
+  var body=JSON.stringify({
+    model:OPENAI_MODEL,
+    input:[
+      {role:'developer',content:[{type:'input_text',text:[
+        '你是人才評估系統。體驗者剛剛應徵「'+card.title+'」，下面是他在面試中說過的所有話。請只根據他說的內容，替五個面向評分。',
+        DIMS.map(function(d,k){return (k+1)+'. '+d.label+'：'+d.hint;}).join('\n'),
+        '規則：',
+        '- score：1～10 分，可以有 0.5。完全沒提到這個面向就給 1 分。提到但很籠統給 2～4 分；有具體事例給 5～7 分；有具體成果、數字或很有說服力給 8～10 分。',
+        '- quotes：最多 2 句，必須是體驗者原話中的一小段（逐字照抄，不要改字、不要加字），每段 4～20 個字。沒有就給空陣列。',
+        '- keywords：最多 5 個，2～4 個字的能力關鍵字（例如：熱忱、學習、責任、溝通）。沒提到就給空陣列。',
+        '- dims 陣列順序必須和上面五個面向相同，共 5 個。',
+        '- 一律使用台灣繁體中文。'
+      ].join('\n')}]},
+      {role:'user',content:[{type:'input_text',text:all}]}
+    ],
+    text:{format:{type:'json_schema',name:'pricetory_receipt',strict:true,schema:{
+      type:'object',additionalProperties:false,
+      properties:{dims:{type:'array',items:{type:'object',additionalProperties:false,
+        properties:{score:{type:'number'},quotes:{type:'array',items:{type:'string'}},keywords:{type:'array',items:{type:'string'}}},
+        required:['score','quotes','keywords']}}},
+      required:['dims']
+    }}},
+    temperature:0.2,max_output_tokens:900
+  });
+  for(var attempt=1;attempt<=2;attempt++){
+    try{
+      var idToken=await getAuthToken();
+      var resp=await fetch(WORKER_BASE+'/openai/v1/responses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:body});
+      if(!resp.ok)throw new Error('HTTP '+resp.status);
+      var parsed=JSON.parse(extractOpenAIText(await resp.json()));
+      var squash=function(s){return String(s||'').replace(/[\s，。！？、,.!?「」"']/g,'');};
+      var flat=squash(all);
+      return DIMS.map(function(d,k){
+        var x=(parsed.dims||[])[k]||{};
+        var sc=Math.max(1,Math.min(10,Math.round(Number(x.score||1)*2)/2));
+        // 只留真的出現在體驗者原話裡的句子
+        var q=(x.quotes||[]).map(function(s){return toTaiwanTerms(String(s).trim().replace(/^[「"']|[」"']$/g,'').replace(/[，。！？,.!?]+$/,''));})
+          .filter(function(s){return s.length>=2&&flat.indexOf(squash(s))>=0;}).slice(0,2);
+        var kw=(x.keywords||[]).map(function(s){return toTaiwanTerms(String(s).trim());}).filter(function(s){return s&&s.length<=6;}).slice(0,5);
+        if(sc<=1){q=[];kw=[];}
+        return {score:sc,quotes:q,keywords:kw};
+      });
+    }catch(e){
+      console.warn('[receipt] 評分失敗',attempt,e.message);
+      if(attempt<2)await sleep(1500);
+    }
+  }
+  return empty;
+}
+
+async function buildReceipt(snapshot){
+  var card=snapshot.card;
+  var dims=await scoreDims(card,snapshot.lines);
+  var w=DIM_WEIGHTS[card.key]||[1,1,1,1,1];
+  var subtotal=0,sum=0,max=0;
+  dims.forEach(function(d,k){
+    d.weight=w[k];
+    d.bonus=d.score>PASS_LINE?Math.round((d.score-PASS_LINE)*PER_POINT*w[k]/100)*100:0;
+    subtotal+=d.bonus;sum+=d.score;max=Math.max(max,d.score);
+  });
+  var avg=Math.round(sum/DIMS.length*10)/10;
+  var deal=snapshot.deal;
+  var at=new Date(snapshot.at);
+  var r={
+    id:String(at.getFullYear()).slice(2)+pad2(at.getMonth()+1)+pad2(at.getDate())+'-'+String(Math.floor(Math.random()*900)+100),
+    at:snapshot.at,
+    title:card.title,
+    hired:!!deal,
+    base:card.min,
+    dims:dims,
+    subtotal:subtotal,
+    avg:avg,max:max,
+    final:deal?deal.amount:0,
+    winner:deal?roleShort(deal.with):'',
+    anyOffer:snapshot.anyOffer
+  };
+  var first=deal?(r.winner+'以 '+fmtNTs(r.final)+' 得標。'):(r.anyOffer?'時間到，沒有敲槌成交。':'沒有公司出價。');
+  r.explain=first+'五項平均 '+fmtScore(avg)+' 分，'+(avg>=ADMIT_AVG?'達到':'未達')+'門檻 '+ADMIT_AVG+' 分。';
+  return r;
+}
+
+// 面試結束時呼叫（成交或時間到）：先在背景評分，台詞講完、評分好了就顯示收據
+function startReceipt(){
+  if(!H||H.receiptPromise)return;
+  var snap={card:H.card,lines:userLines(),deal:H.deal?{with:H.deal.with,amount:H.deal.amount}:null,
+    anyOffer:!!(H.offers[0]||H.offers[1]),at:Date.now()};
+  H.receiptPromise=buildReceipt(snap).catch(function(e){console.warn('[receipt]',e);return null;});
+}
+async function showReceiptWhenReady(runId){
+  if(!H||H.id!==runId)return;
+  startReceipt();
+  var r=await H.receiptPromise;
+  if(!H||H.id!==runId||!r)return;
+  r.shownAt=nowSrv();
+  H.receipt=r;H.phase='receipt';H.status='ended';H.hint='';
+  await hostPublish();
+  if(db)db.ref(RECEIPT_PATH+'/'+r.id).set(r).catch(function(e){console.warn('[receipt] 儲存失敗',e.message);});
+  setTimeout(function(){if(H&&H.id===runId&&H.phase==='receipt')hostReset('receipt_done');},RECEIPT_SHOW_MS);
+}
+
+// ── 畫面 ──
+function receiptUrl(id){
+  var base=location.origin+location.pathname.replace(/[^\/]*$/,'');
+  return base+'receipt.html?id='+encodeURIComponent(id);
+}
+function qrSvg(text){
+  if(typeof qrcode!=='function')return '';
+  var q=qrcode(0,'M');q.addData(text);q.make();
+  var n=q.getModuleCount(),p='';
+  for(var y=0;y<n;y++)for(var x=0;x<n;x++)if(q.isDark(y,x))p+='M'+x+' '+y+'h1v1h-1z';
+  return '<svg viewBox="-2 -2 '+(n+4)+' '+(n+4)+'" shape-rendering="crispEdges"><rect x="-2" y="-2" width="'+(n+4)+'" height="'+(n+4)+'" fill="#fff"/><path d="'+p+'" fill="#111"/></svg>';
+}
+function radarSvg(dims){
+  var cx=200,cy=190,R=125,N=5,ang=function(k){return -Math.PI/2+k*2*Math.PI/N;};
+  var pt=function(k,r){return [cx+r*Math.cos(ang(k)),cy+r*Math.sin(ang(k))];};
+  var s='<svg viewBox="-45 0 490 390" class="rc-radar">';
+  for(var ring=1;ring<=5;ring++){
+    s+='<polygon points="'+[0,1,2,3,4].map(function(k){return pt(k,R*ring/5).join(',');}).join(' ')+'" fill="none" stroke="#c9c9c9" stroke-width="1.2"/>';
+  }
+  for(var k=0;k<N;k++){var e=pt(k,R);s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+e[0]+'" y2="'+e[1]+'" stroke="#c9c9c9" stroke-width="1.2"/>';}
+  var pts=dims.map(function(d,k){return pt(k,R*d.score/10);});
+  s+='<polygon points="'+pts.map(function(p){return p.join(',');}).join(' ')+'" fill="rgba(0,0,0,.22)" stroke="#111" stroke-width="2.5"/>';
+  pts.forEach(function(p){s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="5.5" fill="#111"/>';});
+  var lab=[[cx,cy-R-38,'middle'],[cx+R+42,cy-R*0.31-14,'middle'],[cx+R*0.59+28,cy+R*0.81+22,'middle'],[cx-R*0.59-28,cy+R*0.81+22,'middle'],[cx-R-42,cy-R*0.31-14,'middle']];
+  dims.forEach(function(d,k){
+    var L=lab[k];
+    s+='<text x="'+L[0]+'" y="'+L[1]+'" text-anchor="'+L[2]+'" class="rc-rl">'+DIMS[k].radar+'</text>';
+    s+='<text x="'+L[0]+'" y="'+(L[1]+22)+'" text-anchor="'+L[2]+'" class="rc-rv">'+fmtScore(d.score)+'</text>';
+  });
+  return s+'</svg>';
+}
+function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function receiptHtml(r){
+  var d=new Date(r.at);
+  var dt=d.getFullYear()+'/'+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+  var row=function(k,v,cls){return '<div class="rc-row'+(cls?' '+cls:'')+'"><span class="rc-k">'+k+'</span><span class="rc-dots"></span><span class="rc-v">'+v+'</span></div>';};
+  var h='<div class="rc-head"><div class="rc-title">衡評述值</div><div class="rc-en">PRICETORY</div><div class="rc-sub">人才拍賣收據</div></div>';
+  h+='<div class="rc-hr"></div>';
+  h+=row('單號',esc(r.id),'mono')+row('日期 / 時間',dt,'mono')+row('應徵職位',esc(r.title||'（未填寫）'))+row('評選結果',r.hired?'錄用':'不錄用');
+  h+='<div class="rc-hr"></div>';
+  h+=row('起標價（底薪）',fmtNTs(r.base),'mono bold');
+  h+='<div class="rc-hr"></div>';
+  h+='<div class="rc-sec">— 能力雷達圖 —</div>'+radarSvg(r.dims);
+  h+='<div class="rc-hr"></div>';
+  h+='<div class="rc-sec left">加價明細　/　你的職能</div>';
+  r.dims.forEach(function(x,k){
+    h+=row(DIMS[k].label+'<span class="rc-sc">（'+fmtScore(x.score)+'分）</span>',x.bonus?'+'+fmtNTs(x.bonus):'不加價','item');
+    if(x.quotes&&x.quotes.length){x.quotes.forEach(function(q){h+='<div class="rc-quote">你說：「'+esc(q)+'」</div>';});}
+    else h+='<div class="rc-quote">未提及相關能力</div>';
+    if(x.keywords&&x.keywords.length)h+='<div class="rc-kw">能力關鍵字：'+x.keywords.map(esc).join('、')+'</div>';
+  });
+  h+='<div class="rc-note">及格線 '+PASS_LINE+' 分，超過後每分加價 '+fmtNTs(PER_POINT)+' × 面向權重</div>';
+  h+='<div class="rc-hr"></div>';
+  h+=row('加價小計','+'+fmtNTs(r.subtotal),'mono bold');
+  h+=row('最終月薪',r.hired?fmtNTs(r.final):'未成交','final');
+  h+='<div class="rc-hr"></div>';
+  h+='<div class="rc-k2">得標公司</div><div class="rc-winner">'+(r.hired?esc(r.winner):'無（流標）')+'</div>';
+  h+='<div class="rc-explain">'+esc(r.explain)+'<br>錄取條件：五項平均 ≥ '+ADMIT_AVG+' 分，且最高單項 ≥ '+ADMIT_MAX+' 分（你的平均：'+fmtScore(r.avg)+' 分）</div>';
+  h+='<div class="rc-stamp'+(r.hired?' ok':'')+'">'+(r.hired?'錄用':'不錄用')+'</div>';
+  h+='<div class="rc-hr"></div>';
+  h+='<div class="rc-sec">— 電子收據 —</div><div class="rc-qr">'+qrSvg(receiptUrl(r.id))+'</div><div class="rc-qrcap">掃描 QR Code 取得收據文字檔</div>';
+  h+='<div class="rc-thanks">謝謝惠顧　你的價值，不只一個數字</div>';
+  return h;
+}
+var shownReceiptId=null,receiptAnim=null;
+function renderReceipt(s){
+  var ov=document.getElementById('receipt-overlay');if(!ov)return;
+  var r=s&&s.phase==='receipt'&&s.receipt;
+  if(!r){if(shownReceiptId){ov.classList.add('hidden');shownReceiptId=null;if(receiptAnim)cancelAnimationFrame(receiptAnim);receiptAnim=null;}return;}
+  if(shownReceiptId===r.id)return;
+  shownReceiptId=r.id;
+  var paper=document.getElementById('receipt-paper');
+  paper.innerHTML=receiptHtml(r);
+  ov.classList.remove('hidden');
+  var start=r.shownAt||nowSrv();
+  function step(){
+    if(shownReceiptId!==r.id)return;
+    var W=window.innerWidth,Hh=window.innerHeight;
+    var k=W*(1-2*RECEIPT_SIDE_MARGIN)/paper.offsetWidth;
+    var total=Math.max(0,paper.offsetHeight*k-Hh);
+    var t=(nowSrv()-start-RECEIPT_SCROLL_DELAY)/RECEIPT_SCROLL_MS;
+    t=Math.max(0,Math.min(1,t));
+    var e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; // 緩入緩出
+    paper.style.transform='translateX(-50%) translateY('+(-total*e)+'px) scale('+k+')';
+    receiptAnim=requestAnimationFrame(step);
+  }
+  step();
+}
+
 // ── Arduino（Web Serial）：RFID 讀卡（TAG / TAG_OFF）與敲槌（HIT）──
-// demo 不需要；之後接硬體時在主控電腦的系統設定頁按「連接 Arduino」。
+// 第一次使用：在主控電腦的系統設定頁按「連接 Arduino」，選 RFID 讀卡機（之後敲槌按鈕也一樣再選一次）。
+// 選過一次後，Chrome 會記住；重新整理頁面或 Arduino 重新插拔都會自動重新連上。
 var serialPorts=[];
 async function connectSerial(){
   if(!('serial' in navigator)){showNotif('這個瀏覽器不支援 Web Serial，請用 Chrome 或 Edge');return;}
@@ -2847,7 +3129,7 @@ async function openSerialPort(port){
   if(serialPorts.indexOf(port)>=0)return;
   await port.open({baudRate:115200});
   serialPorts.push(port);
-  var st=document.getElementById('serial-status');if(st)st.textContent='已連接 '+serialPorts.length+' 個裝置';
+  updateSerialStatus();
   var reader=port.readable.pipeThrough(new TextDecoderStream()).getReader();
   var buf='';
   (async function(){
@@ -2858,23 +3140,42 @@ async function openSerialPort(port){
         lines.forEach(function(l){handleSerialLine(l.trim());});
       }
     }catch(e){console.warn('[Serial] 讀取中斷',e.message);}
+    // 斷線（拔掉 USB）：移除，等重新插上時自動連回
+    try{reader.releaseLock();}catch(e){}
+    try{await port.close();}catch(e){}
+    var k=serialPorts.indexOf(port);if(k>=0)serialPorts.splice(k,1);
+    updateSerialStatus();
+    showNotif('Arduino 連線中斷，重新插上 USB 會自動連回');
   })();
+}
+function updateSerialStatus(){
+  var st=document.getElementById('serial-status');
+  if(st)st.textContent=serialPorts.length?('已連接 '+serialPorts.length+' 個裝置'):'未連接';
 }
 function handleSerialLine(line){
   if(!line||/^(DBG|INFO)/.test(line))return;
   console.log('[Serial]',line);
   if(line==='READY')return;
   if(!isHost()||!activeChar)return;
-  if(line.indexOf('TAG_OFF:')===0){hostRemoveCard();return;}
+  if(line.indexOf('TAG_OFF:')===0){
+    var off=line.slice(8).trim().toUpperCase();
+    if(H&&H.card&&H.card.uid&&off&&H.card.uid!==off)return; // 拿起的不是現在這張卡
+    hostRemoveCard();return;
+  }
   if(line.indexOf('TAG:')===0){
-    var card=cardByUid(line.slice(4));
+    var card=cardByUid(line.slice(4).trim());
     if(card)hostPlaceCard(card);else showNotif('未登記的卡號：'+line.slice(4));
     return;
   }
+  // 敲槌：之後若改成兩個按鈕，送 HIT_A / HIT_B 就會直接成交；目前只有一個按鈕（HIT），先用鍵盤 A／B
+  if(line==='HIT_A'){hostHammer(0);return;}
+  if(line==='HIT_B'){hostHammer(1);return;}
   if(line==='HIT'){showNotif('請按鍵盤 A 或 B 選擇成交對象');}
 }
 if('serial' in navigator){
   navigator.serial.getPorts().then(function(ports){ports.forEach(function(p){openSerialPort(p).catch(function(){});});});
+  // 重新插上之前選過的 Arduino → 自動連上（剛插上時 Arduino 會重開機，稍等一下再開）
+  navigator.serial.addEventListener('connect',function(e){setTimeout(function(){openSerialPort(e.target||e.port).catch(function(err){console.warn('[Serial] 自動連線失敗',err.message);});},800);});
 }
 
 buildSetupPanels();

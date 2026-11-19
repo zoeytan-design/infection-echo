@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>衡評述值 Pricetory ・ 人才拍賣收據</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+body{margin:0;background:#eceae4;color:#1a1a1a;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
+main{max-width:520px;margin:0 auto;padding:24px 16px 40px;}
+pre{background:#fbfaf6;padding:22px 18px;white-space:pre-wrap;word-break:break-word;font-family:"Courier New","Noto Sans Mono",monospace;font-size:14px;line-height:1.7;box-shadow:0 2px 10px rgba(0,0,0,.08);}
+button{display:block;width:100%;padding:14px;font-size:16px;font-weight:700;border:0;border-radius:10px;background:#1a1a1a;color:#fff;margin-top:14px;}
+.msg{text-align:center;color:#666;padding:40px 0;}
+</style>
+</head>
+<body>
+<main>
+  <div id="msg" class="msg">讀取收據中…</div>
+  <pre id="text" hidden></pre>
+  <button id="dl" hidden>下載收據文字檔</button>
+</main>
+<script>
+var FB={apiKey:'AIzaSyDAyfK-aDZTLPM8lp7VGi_rD2kI2a3wLn8',projectId:'encho-20101',dbUrl:'https://encho-20101-default-rtdb.firebaseio.com',appId:'1:51351498643:web:61992221311dc73fc5c266'};
+var DIM_LABELS=['專業技能','產業與相關經驗','軟實力與溝通協作','問題解決與抗壓性','文化與價值觀契合'];
+var RADAR_LABELS=['專業技能','產業經驗','軟實力','抗壓解題','文化契合'];
+function pad2(n){return ('0'+n).slice(-2);}
+function nt(n){return 'NT$ '+Number(n).toLocaleString('en-US');}
+function sc(n){n=Math.round(Number(n||0)*10)/10;return (n%1===0)?String(n):n.toFixed(1);}
+function toText(r){
+  var d=new Date(r.at);
+  var dt=d.getFullYear()+'/'+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+  var hr='- - - - - - - - - - - - - - - - - - -';
+  var L=[];
+  L.push('衡評述值','PRICETORY','人才拍賣收據',hr);
+  L.push('單號：'+r.id,'日期 / 時間：'+dt,'應徵職位：'+(r.title||'（未填寫）'),'評選結果：'+(r.hired?'錄用':'不錄用'),hr);
+  L.push('起標價（底薪）：'+nt(r.base),hr);
+  L.push('— 能力雷達圖 —');
+  (r.dims||[]).forEach(function(x,k){L.push(RADAR_LABELS[k]+'：'+sc(x.score));});
+  L.push(hr,'加價明細 / 你的職能');
+  (r.dims||[]).forEach(function(x,k){
+    L.push('',DIM_LABELS[k]+'（'+sc(x.score)+'分）：'+(x.bonus?'+'+nt(x.bonus):'不加價'));
+    if(x.quotes&&x.quotes.length)x.quotes.forEach(function(q){L.push('  你說：「'+q+'」');});
+    else L.push('  未提及相關能力');
+    if(x.keywords&&x.keywords.length)L.push('  能力關鍵字：'+x.keywords.join('、'));
+  });
+  L.push('','及格線 3 分，超過後每分加價 NT$ 1,000 × 面向權重',hr);
+  L.push('加價小計：+'+nt(r.subtotal||0),'最終月薪：'+(r.hired?nt(r.final):'未成交'),hr);
+  L.push('得標公司','　'+(r.hired?r.winner:'無（流標）'));
+  L.push(r.explain||'');
+  L.push('錄取條件：五項平均 ≥ 3.5 分，且最高單項 ≥ 6 分（你的平均：'+sc(r.avg)+' 分）');
+  L.push('','【'+(r.hired?'錄用':'不錄用')+'】',hr,'謝謝惠顧　你的價值，不只一個數字');
+  return L.join('\n');
+}
+var id=new URLSearchParams(location.search).get('id');
+var msg=document.getElementById('msg');
+if(!id){msg.textContent='找不到收據編號';}
+else{
+  firebase.initializeApp({apiKey:FB.apiKey,projectId:FB.projectId,databaseURL:FB.dbUrl,appId:FB.appId});
+  firebase.auth().signInAnonymously().then(function(){
+    return firebase.database().ref('receipts/'+id).once('value');
+  }).then(function(snap){
+    var r=snap.val();
+    if(!r){msg.textContent='找不到這張收據（'+id+'）';return;}
+    var t=toText(r);
+    msg.hidden=true;
+    var pre=document.getElementById('text');pre.textContent=t;pre.hidden=false;
+    var b=document.getElementById('dl');b.hidden=false;
+    b.onclick=function(){
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob(['﻿'+t],{type:'text/plain;charset=utf-8'}));
+      a.download='Pricetory收據_'+id+'.txt';document.body.appendChild(a);a.click();a.remove();
+    };
+  }).catch(function(e){msg.textContent='讀取失敗：'+e.message;});
+}
+</script>
+</body>
+</html>

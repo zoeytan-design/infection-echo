@@ -263,7 +263,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;hei
       </div>
 
       <div class="hud-center hidden" id="hud-center"><div class="hud-center-box"><div class="hud-center-title" id="hud-center-title"></div><div class="hud-center-sub" id="hud-center-sub"></div></div></div>
-      <div class="key-legend" id="key-legend">1–5 放卡 · 0 拿卡 · Enter 開始／結束自介 · A / B 敲槌成交 · T 打字代替說話 · R 重置 · D 收音診斷 · H 隱藏說明</div>
+      <div class="key-legend" id="key-legend">1–5 放卡 · 0 拿卡 · A / B 敲槌成交 · T 打字代替說話 · R 重置 · D 收音診斷 · H 隱藏說明</div>
       <div class="key-tip" id="key-tip">H：按鍵說明　D：收音診斷</div>
       <pre class="mic-debug" id="mic-debug"></pre>
       <button class="chat-back-float" onclick="goBack()">← 返回</button>
@@ -935,9 +935,9 @@ var SESSION_PATH='infectionSession';
 
 // ── 流程時間設定（毫秒）────────────────────────────────
 var TOTAL_MS=180000;          // 整場面試 3 分鐘
-var INTRO_MS=30000;           // 開場自我介紹 30 秒（顧承淵說完開場白才開始計時）
+var INTRO_MS=30000;           // 開場自我介紹 30 秒（顧承淵說完開場白才開始計時；開場白包含在 3 分鐘內）
 var OPENING_SPEAKER=0;        // 放卡後先開口請體驗者自我介紹的 AI（0＝顧承淵，1＝程以墨）
-function openingLine(card){return '我是'+getRole(OPENING_SPEAKER).name+'。你應徵的是'+card.title+'，請開始闡述你的應徵意願，給你'+Math.round(INTRO_MS/1000)+'秒。';}
+function openingLine(card){return '歡迎你來應徵'+card.title+'，請你介紹一下你自己並闡述你的應徵意願。';}
 var LISTEN_WINDOW_MS=1500;    // AI 說完一句（沒有問體驗者）後，留給體驗者插話的時間
 var ASK_WINDOW_MS=8000;       // 有人問體驗者問題時，等他回答的時間
 var PRODS_BEFORE_BANTER=2;    // 連續幾次問了沒回答後，兩位 AI 先互相聊幾句
@@ -1735,7 +1735,7 @@ async function runIntro(runId){
   if(!hostAlive(runId)||H.phase!=='intro')return;
   // 2. 說完才開始 30 秒自我介紹計時與收音
   var t=nowSrv();
-  H.introEndsAt=t+INTRO_MS;H.deadline=Math.max(H.deadline,t+INTRO_MS+(TOTAL_MS-INTRO_MS));
+  H.introEndsAt=t+INTRO_MS; // 3 分鐘總時間從開場白開始就在算
   H.status='listening';H.thinker=-1;
   H.hint='請說明你為什麼想應徵「'+H.card.title+'」';
   SR.introText='';SR.pending='';SR.interim='';
@@ -2523,7 +2523,7 @@ function renderSession(s){
     var why=(s&&s.endReason==='card_removed')?'職業卡已移除，面試中止。\n\n':'';
     setCenter('請放上職業卡',why+'選一個你想應徵的職位'+hostHint);
   }else if(phase==='ready'){
-    setCenter('應徵：'+(c?c.title:''),'請面對鏡頭，面試即將開始'+(isHost()?'\n（或按 Enter 直接開始）':''));
+    setCenter('應徵：'+(c?c.title:''),'請面對鏡頭，面試即將開始');
   }else if(phase==='ended'){
     if(s.endReason==='deal'&&s.deal)setCenter('成交！','與 '+s.deal.name+' 的企業成交\n月薪 '+fmtNT(s.deal.amount),'deal');
     else setCenter('面試時間到','本次面試沒有成交\n拿起職業卡即可重新開始');
@@ -2654,6 +2654,7 @@ function stopSpeaking(){
   var sw=document.getElementById('swave');if(sw)sw.classList.remove('on');
 }
 
+window.__startIntro=function(){startIntro();};window.__endIntro=function(){if(H&&H.phase==='intro')H.introEndEarly=true;}; // 只給自動測試用（沒有鏡頭時）
 // ── 鏡頭：主控電腦偵測到體驗者面對鏡頭，就開始自我介紹 ──────
 var faceHeldSince=null;
 function onFaceResults(results){
@@ -2822,11 +2823,6 @@ document.addEventListener('keydown',function(e){
   var card=cardByKey(k);
   if(card){hostPlaceCard(card);return;}
   if(k==='0'){hostRemoveCard();return;}
-  if(k==='Enter'){
-    if(H&&H.phase==='ready')startIntro();
-    else if(H&&H.phase==='intro')H.introEndEarly=true;
-    return;
-  }
   if(k==='a'||k==='A'){hostHammer(0);return;}
   if(k==='b'||k==='B'){hostHammer(1);return;}
   if(k==='r'||k==='R'){hostReset('reset');return;}

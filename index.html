@@ -1707,7 +1707,7 @@ var OPEN_HINT='隨時可以補充或開出期待月薪';
 function hostAlive(runId,allowDeal){
   if(!H||H.id!==runId)return false;
   if(H.phase==='intro'||H.phase==='round1'||H.phase==='open')return true;
-  return !!(allowDeal&&H.phase==='deal');
+  return !!(allowDeal&&(H.phase==='deal'||H.phase==='closing'));
 }
 function hostTimeUp(){return H&&H.deadline&&nowSrv()>=H.deadline;}
 
@@ -1742,7 +1742,7 @@ function hostReset(reason){
 
 function hostPlaceCard(card){
   if(!card)return;
-  if(H&&(H.phase==='deal'||H.phase==='ended'||H.phase==='receipt')){showNotif('收據顯示中，結束後才能放下一張卡');return;}
+  if(H&&(H.phase==='deal'||H.phase==='closing'||H.phase==='ended'||H.phase==='receipt')){showNotif('收據顯示中，結束後才能放下一張卡');return;}
   if(H&&H.card&&H.card.key===card.key)return; // 同一張卡重複感應
   stopRecognition();
   H={
@@ -1760,7 +1760,7 @@ function hostPlaceCard(card){
 function hostRemoveCard(){
   if(!H)return;
   // 已經成交或時間到：結果已定，拿起卡片不影響收據（收據 1 分鐘後自動重新開始）
-  if(H.phase==='deal'||H.phase==='ended'||H.phase==='receipt')return;
+  if(H.phase==='deal'||H.phase==='closing'||H.phase==='ended'||H.phase==='receipt')return;
   hostReset('card_removed');
 }
 
@@ -2072,7 +2072,7 @@ async function speakTurn(runId,i,res,kind,opts){
     });
     if(keepParts.length!==parts.length){
       console.warn('[host] 拿掉不允許的出價句：',text);
-      text=keepParts.join('').trim()||((FALLBACK_LINES[i]||FALLBACK_LINES[0]).default);
+      text=keepParts.join('').trim()||((FALLBACK_LINES[i]||FALLBACK_LINES[0])[kind]||(FALLBACK_LINES[i]||FALLBACK_LINES[0]).default);
     }
   }
   var spokenAmt=canBid?pickSpokenOffer(text,res&&res.salary,H.offers[1-i]?H.offers[1-i].amount:0):0;
@@ -2140,7 +2140,7 @@ async function speakTurn(runId,i,res,kind,opts){
   }
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
-  if(kind==='opening'||kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
+  if(kind==='opening'||kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose'||kind==='timeout_close')askUser=false;
   var rev=(kind==='user'&&res&&res.reverse)||'none'; // 只有回應體驗者的那句才算接受／還價／拒絕
   // 體驗者開了期待月薪：台詞一定要明確回應那個金額（AI 沒提到就由程式補上）
   if(kind==='user'&&opts.userAsk){
@@ -2238,9 +2238,21 @@ async function hostDeal(i){
     await showReceiptWhenReady(runId);
   }
 }
+var TIMEOUT_CLOSER=1;          // 時間到沒人敲槌時，說收尾話的 AI（1＝程以墨）
 async function hostEnd(runId,reason){
   if(!H||H.id!==runId)return;
-  if(H.phase==='ended'||H.phase==='receipt')return;
+  if(H.phase==='closing'||H.phase==='ended'||H.phase==='receipt')return;
+  if(reason==='timeout'){
+    // 時間到、沒人敲槌：程以墨說一句收尾話，再出收據
+    H.phase='closing';H.endReason='timeout';H.prefetch=null;H.pendingWarn=null;
+    H.status='thinking';H.thinker=TIMEOUT_CLOSER;H.hint='面試時間到';H.note='';
+    SR.pending='';stopRecognition();
+    startReceipt(); // 收尾話講的同時，在背景替收據評分
+    await hostPublish();
+    var rc=await genSafe(TIMEOUT_CLOSER,{kind:'timeout_close'});
+    await speakTurn(runId,TIMEOUT_CLOSER,rc,'timeout_close',{allowDeal:true});
+    if(!H||H.id!==runId||H.phase!=='closing')return;
+  }
   H.phase='ended';H.endReason=reason;H.status='ended';H.thinker=-1;H.prefetch=null;
   H.hint='面試結束 ・ 正在產生收據';
   stopRecognition();
@@ -2257,8 +2269,8 @@ setInterval(function(){
 //  AI 台詞生成（主控電腦呼叫，經 Cloudflare Worker 轉給 OpenAI）
 // ════════════════════════════════════════════════════════
 var FALLBACK_LINES={
-  0:{default:'你的回答還不足以說服我。請給我一個具體的成果。',warn:'你還沒有聽到我的條件就想結束？你不想面試了嗎？',deal_win:'很好。希望你的表現能證明這個價格是合理的。',deal_lose:'這是你的選擇。我會把這個結果記錄進我的模型。'},
-  1:{default:'等等，這個想法很有意思，再多說一點！',warn:'欸，我都還沒開價耶，你這樣就要走了？你不想面試了嗎？',deal_win:'太好了！我已經開始期待你會提出什麼問題了！',deal_lose:'好吧，可惜了。不過你會後悔沒選一個更有趣的地方喔。'}
+  0:{default:'你的回答還不足以說服我。請給我一個具體的成果。',warn:'你還沒有聽到我的條件就想結束？你不想面試了嗎？',deal_win:'很好。希望你的表現能證明這個價格是合理的。',deal_lose:'這是你的選擇。我會把這個結果記錄進我的模型。',timeout_close:'時間到了。沒有決定，本身就是一種決定。'},
+  1:{default:'等等，這個想法很有意思，再多說一點！',warn:'欸，我都還沒開價耶，你這樣就要走了？你不想面試了嗎？',deal_win:'太好了！我已經開始期待你會提出什麼問題了！',deal_lose:'好吧，可惜了。不過你會後悔沒選一個更有趣的地方喔。',timeout_close:'時間到囉！好可惜，今天沒有成交，不過很高興認識你！'}
 };
 var lastAiErrorNotif=0;
 async function genSafe(i,ctx){
@@ -2387,6 +2399,9 @@ function buildTask(i,ctx){
       break;
     case 'deal_lose':
       task='體驗者敲槌了，選擇了對手'+op.name+'的企業（月薪 '+fmtSpoken(H.deal.amount)+'）。請用一句符合你人格的話回應（可以帶點不甘心或評論）。不能出價。';
+      break;
+    case 'timeout_close':
+      task='三分鐘的面試時間到了，體驗者沒有敲槌，沒有和任何一間企業成交（目前雙方的出價：'+[0,1].map(function(k){return getRole(k).name+(H.offers[k]?' '+fmtSpoken(H.offers[k].amount):' 沒出價');}).join('、')+'）。請代表兩邊用一句符合你人格的話為這場面試收尾（可以帶點可惜或評論）。不能出價，不要問問題。';
       break;
     default:
       task='請繼續面試。';
@@ -2593,7 +2608,7 @@ function renderSession(s){
     dlg={show:true,who:whoOf(t.speaker),cls:t.speaker===0?'a':'b',state:'',text:t.text};
   }else if(phase==='intro'){
     dlg={show:true,who:'你',cls:'user',state:'自我介紹中',text:liveUser||(isHost()&&SR.introText)||('請說明你為什麼想應徵「'+(c?c.title:'')+'」'),dim:!(liveUser||(isHost()&&SR.introText))};
-  }else if(phase==='round1'||phase==='open'||phase==='deal'||phase==='ended'||phase==='receipt'){
+  }else if(phase==='round1'||phase==='open'||phase==='deal'||phase==='closing'||phase==='ended'||phase==='receipt'){
     if(liveUser){
       dlg={show:true,who:'你',cls:'user',state:'說話中',text:liveUser};
     }else if(s.status==='speaking'&&t){
@@ -2656,7 +2671,7 @@ function tickTimer(){
   if(!s||!s.deadline||s.phase==='idle'||s.phase==='ready'){el.textContent='--:--';el.classList.remove('low');return;}
   var ref=s.phase==='intro'?s.introEndsAt:s.deadline;
   var left=Math.max(0,Math.ceil((ref-nowSrv())/1000));
-  if(s.phase==='ended'||s.phase==='receipt'||s.phase==='deal')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
+  if(s.phase==='ended'||s.phase==='receipt'||s.phase==='deal'||s.phase==='closing')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
   if(s.phase==='intro'&&!s.introEndsAt){el.textContent=Math.round(INTRO_MS/1000)+'s';el.classList.remove('low');}
   else if(s.phase==='intro'){el.textContent=left+'s';el.classList.toggle('low',left<=5);}
   else{el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);el.classList.toggle('low',left<=30&&s.phase!=='ended');}

@@ -935,7 +935,9 @@ var SESSION_PATH='infectionSession';
 
 // ── 流程時間設定（毫秒）────────────────────────────────
 var TOTAL_MS=180000;          // 整場面試 3 分鐘
-var INTRO_MS=15000;           // 開場自我介紹 15 秒
+var INTRO_MS=30000;           // 開場自我介紹 30 秒（顧承淵說完開場白才開始計時）
+var OPENING_SPEAKER=0;        // 放卡後先開口請體驗者自我介紹的 AI（0＝顧承淵，1＝程以墨）
+function openingLine(card){return '我是'+getRole(OPENING_SPEAKER).name+'。你應徵的是'+card.title+'，請開始闡述你的應徵意願，給你'+Math.round(INTRO_MS/1000)+'秒。';}
 var LISTEN_WINDOW_MS=1500;    // AI 說完一句（沒有問體驗者）後，留給體驗者插話的時間
 var ASK_WINDOW_MS=8000;       // 有人問體驗者問題時，等他回答的時間
 var PRODS_BEFORE_BANTER=2;    // 連續幾次問了沒回答後，兩位 AI 先互相聊幾句
@@ -1652,7 +1654,7 @@ function enterRole(idx){
 
 // ════════════════════════════════════════════════════════
 //  主控流程（只在主控電腦上跑）
-//  phase: idle → ready（已放卡）→ intro（15 秒自介）→ round1（第一輪，不插話）
+//  phase: idle → ready（已放卡）→ intro（AI 開場白 → 30 秒自介）→ round1（第一輪，不插話）
 //         → open（插話／AI 互談／爆料／敲槌）→ deal（成交收尾）→ ended
 //  主控負責：計時、決定誰說話、呼叫 AI 生成兩位面試官的台詞、記錄出價。
 //  每台電腦只負責把「輪到自己角色」的台詞念出來，念完回報 turnDone。
@@ -1720,19 +1722,28 @@ function hostRemoveCard(){
 function startIntro(){
   if(!H||H.phase!=='ready')return;
   var t=nowSrv();
-  H.phase='intro';H.startedAt=t;H.deadline=t+TOTAL_MS;H.introEndsAt=t+INTRO_MS;
-  H.status='listening';H.thinker=-1;
-  H.hint='請說明你為什麼想應徵「'+H.card.title+'」';
+  H.phase='intro';H.startedAt=t;H.deadline=t+TOTAL_MS;H.introEndsAt=0;
+  H.thinker=-1;
+  H.hint='請聆聽'+getRole(OPENING_SPEAKER).name+'的開場';
   SR.introText='';SR.pending='';SR.interim='';
-  startRecognition();
-  hostPublish();
   runIntro(H.id);
 }
 
 async function runIntro(runId){
+  // 1. 先由一位 AI 開口，請體驗者開始自我介紹（這段不收音，避免收到 AI 自己的聲音）
+  await speakTurn(runId,OPENING_SPEAKER,{spokenText:openingLine(H.card),bid:false,salary:0,reverse:'none',askUser:false},'opening');
+  if(!hostAlive(runId)||H.phase!=='intro')return;
+  // 2. 說完才開始 30 秒自我介紹計時與收音
+  var t=nowSrv();
+  H.introEndsAt=t+INTRO_MS;H.deadline=Math.max(H.deadline,t+INTRO_MS+(TOTAL_MS-INTRO_MS));
+  H.status='listening';H.thinker=-1;
+  H.hint='請說明你為什麼想應徵「'+H.card.title+'」';
+  SR.introText='';SR.pending='';SR.interim='';
+  startRecognition();
+  await hostPublish();
   while(hostAlive(runId)&&H.phase==='intro'&&nowSrv()<H.introEndsAt&&!H.introEndEarly)await sleep(150);
   if(!hostAlive(runId))return;
-  // 15 秒到了但體驗者還在講，最多再等 3 秒讓他講完這句
+  // 時間到了但體驗者還在講，最多再等 3 秒讓他講完這句
   var extra=Date.now()+3000;
   while(hostAlive(runId)&&!H.introEndEarly&&Date.now()<extra&&SR.interim&&Date.now()-SR.lastActivity<USER_SILENCE_MS)await sleep(150);
   if(!hostAlive(runId))return;
@@ -2084,7 +2095,7 @@ async function speakTurn(runId,i,res,kind,opts){
   }
   var mustAsk=['silence','banter_end','handoff','expose_reply'].indexOf(kind)>=0;
   var askUser=!offer&&(mustAsk||!!(res&&res.askUser)||/[？?][」"]?\s*$/.test(text));
-  if(kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
+  if(kind==='opening'||kind==='banter'||kind==='expose'||kind==='warn'||kind==='deal_win'||kind==='deal_lose')askUser=false;
   var rev=(kind==='user'&&res&&res.reverse)||'none'; // 只有回應體驗者的那句才算接受／還價／拒絕
   // 體驗者開了期待月薪：台詞一定要明確回應那個金額（AI 沒提到就由程式補上）
   if(kind==='user'&&opts.userAsk){
@@ -2281,10 +2292,10 @@ function buildTask(i,ctx){
   switch(ctx.kind){
     case 'round1':
       if(H.noIntro){
-        task='體驗者在 15 秒的自我介紹時間裡一句話都沒說。這是你第一次發言。\n'+follow+
+        task='體驗者在 30 秒的自我介紹時間裡一句話都沒說。這是你第一次發言。\n'+follow+
           '依你的人格回應他的沉默，並問他一個問題，讓他開口。這次不能出價。';
       }else{
-        task='體驗者剛剛用 15 秒做完自我介紹（見對話紀錄最後一行）。這是你在這場面試第一次發言。\n'+follow+planned+
+        task='體驗者剛剛用 30 秒做完自我介紹（見對話紀錄最後一行）。這是你在這場面試第一次發言。\n'+follow+planned+
           '只有當他的話裡出現符合你「核心價值觀」或「你想找的人」的具體事例時，才開價：開一個有誠意的價格（大約在行情中段，表現特別好可以更高），說原因和你對他的期待。'+
           '「認真、努力、願意學習、願意加班、穩定」這類泛泛的自我評價不算理由。'+
           '如果沒有具體事例，或他說的內容踩到你最討厭的特質，就不要出價，依你的人格直接質疑他或問他一個問題。';
@@ -2528,7 +2539,9 @@ function renderSession(s){
   function whoOf(i){return getRole(i).name+'・'+(getRole(i).title||'');}
   var userNewer=!!(s&&s.userText&&s.userAt&&(!t||!t.at||s.userAt>t.at));
   var liveUser=isHost()&&SR.interim&&(phase==='intro'||phase==='open')?SR.interim:'';
-  if(phase==='intro'){
+  if(phase==='intro'&&s.status==='speaking'&&t){
+    dlg={show:true,who:whoOf(t.speaker),cls:t.speaker===0?'a':'b',state:'',text:t.text};
+  }else if(phase==='intro'){
     dlg={show:true,who:'你',cls:'user',state:'自我介紹中',text:liveUser||(isHost()&&SR.introText)||('請說明你為什麼想應徵「'+(c?c.title:'')+'」'),dim:!(liveUser||(isHost()&&SR.introText))};
   }else if(phase==='round1'||phase==='open'||phase==='deal'||phase==='ended'){
     if(liveUser){
@@ -2563,6 +2576,8 @@ function renderSession(s){
     // 念台詞時由 handleSpeaking 設成 speaking
   }else if(thinker===me||thinker===2){
     set3DState('thinking');
+  }else if(phase==='intro'&&s.status==='speaking'&&t){
+    set3DListeningFrom(t.speaker);
   }else if(phase==='intro'){
     set3DListeningFrom('user');
   }else if(s.status==='speaking'&&t){
@@ -2592,7 +2607,8 @@ function tickTimer(){
   var ref=s.phase==='intro'?s.introEndsAt:s.deadline;
   var left=Math.max(0,Math.ceil((ref-nowSrv())/1000));
   if(s.phase==='ended'||s.phase==='deal')left=Math.max(0,Math.ceil((s.deadline-nowSrv())/1000));
-  if(s.phase==='intro'){el.textContent=left+'s';el.classList.toggle('low',left<=5);}
+  if(s.phase==='intro'&&!s.introEndsAt){el.textContent=Math.round(INTRO_MS/1000)+'s';el.classList.remove('low');}
+  else if(s.phase==='intro'){el.textContent=left+'s';el.classList.toggle('low',left<=5);}
   else{el.textContent=Math.floor(left/60)+':'+('0'+(left%60)).slice(-2);el.classList.toggle('low',left<=30&&s.phase!=='ended');}
 }
 setInterval(tickTimer,250);

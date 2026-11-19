@@ -28,7 +28,7 @@ AI 時代，大部分工作都被 AI 取代。體驗者來到 AI 經營的企業
 ## 硬體（都接主控電腦）
 
 - **RFID 讀卡機（RC522 + UNO）**：程式在 `arduino/pricetory_rfid/`。放卡送 `TAG:卡號`，拿起送 `TAG_OFF:卡號`。
-- **敲槌按鈕（Nano）**：程式在 `arduino/pricetory_button/`。目前只有**一個**按鈕（D2），按下只送 `HIT`，分不出 A／B，所以成交暫時還是用鍵盤 A／B。之後若改成兩個按鈕、分別送 `HIT_A`／`HIT_B`，網頁就會直接成交，不用再改網頁。
+- **成交按鈕（Nano，兩顆）**：程式在 `arduino/pricetory_button/`。A 按鈕接 D2、B 按鈕接 D3（另一隻腳接 GND）。按 A 送 `PICK_A`＝和顧承淵成交，按 B 送 `PICK_B`＝和程以墨成交，規則和鍵盤 A／B 完全相同（第一輪結束前、或那位還沒出價時按下無效）。按下任何一顆後 1.2 秒內再按不算。
 - **第一次連接**：主控電腦開「系統設定」→ 按「🔌 連接 Arduino」→ 選讀卡機的 COM 埠（按鈕也一樣再選一次）。Chrome 會記住，之後重新整理或重新插 USB 都會自動連上。
 
 | 卡號 | 職缺 |
@@ -104,5 +104,4 @@ AI 時代，大部分工作都被 AI 取代。體驗者來到 AI 經營的企業
 
 ## 硬體（之後再接）
 
-- 已寫好的 RFID 程式（`pricetory_rfid.ino`，送出 `TAG:`、`TAG_OFF:`）和敲槌程式（`pricetory_button.ino`，送出 `HIT`）可直接接上。在主控電腦的「系統設定」按「連接 Arduino」，各選一次連接埠即可。
-- 收到 `HIT` 時目前只會提示「請按 A 或 B」，因為還沒決定敲槌時怎麼選成交對象。
+- RFID 程式（`pricetory_rfid.ino`，送出 `TAG:`、`TAG_OFF:`）和成交按鈕程式（`pricetory_button.ino`，送出 `PICK_A`、`PICK_B`）可直接接上。在主控電腦的「系統設定」按「連接 Arduino」，各選一次連接埠即可。

@@ -3036,9 +3036,11 @@ async function showReceiptWhenReady(runId){
   var r=await H.receiptPromise;
   if(!H||H.id!==runId||!r)return;
   r.shownAt=nowSrv();
+  // 先存到 Firebase（QR Code 連到的收據頁要讀），再顯示
+  if(db){try{await Promise.race([db.ref(RECEIPT_PATH+'/'+r.id).set(r),sleep(4000)]);}catch(e){console.warn('[receipt] 儲存失敗',e.message);}}
+  if(!H||H.id!==runId)return;
   H.receipt=r;H.phase='receipt';H.status='ended';H.hint='';
   await hostPublish();
-  if(db)db.ref(RECEIPT_PATH+'/'+r.id).set(r).catch(function(e){console.warn('[receipt] 儲存失敗',e.message);});
   setTimeout(function(){if(H&&H.id===runId&&H.phase==='receipt')hostReset('receipt_done');},RECEIPT_SHOW_MS);
 }
 
@@ -3182,10 +3184,10 @@ function handleSerialLine(line){
     if(card)hostPlaceCard(card);else showNotif('未登記的卡號：'+line.slice(4));
     return;
   }
-  // 敲槌：之後若改成兩個按鈕，送 HIT_A / HIT_B 就會直接成交；目前只有一個按鈕（HIT），先用鍵盤 A／B
-  if(line==='HIT_A'){hostHammer(0);return;}
-  if(line==='HIT_B'){hostHammer(1);return;}
-  if(line==='HIT'){showNotif('請按鍵盤 A 或 B 選擇成交對象');}
+  // 成交按鈕（兩顆）：A 按鈕＝和顧承淵成交、B 按鈕＝和程以墨成交（和鍵盤 A／B 完全相同）
+  if(line==='PICK_A'||line==='HIT_A'){hostHammer(0);return;}
+  if(line==='PICK_B'||line==='HIT_B'){hostHammer(1);return;}
+  if(line==='HIT'){showNotif('請按 A 或 B 按鈕選擇成交對象');}
 }
 if('serial' in navigator){
   navigator.serial.getPorts().then(function(ports){ports.forEach(function(p){openSerialPort(p).catch(function(){});});});
